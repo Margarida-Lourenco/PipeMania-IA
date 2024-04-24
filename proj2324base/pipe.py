@@ -7,6 +7,8 @@
 # 00000 Nome2
 
 import sys
+import numpy as np
+
 from search import (
     Problem,
     Node,
@@ -34,37 +36,38 @@ class PipeManiaState:
 
 class Board:
     """Representação interna de um tabuleiro de PipeMania."""
+    
+    def __init__(self, matrix):
+        self.matrix = np.array(matrix)
+        self.rows, self.cols = self.matrix.shape
 
     def get_value(self, row: int, col: int) -> str:
         """Devolve o valor na respetiva posição do tabuleiro."""
-        # TODO
-        pass
+        if 0 <= row < self.rows and 0 <= col < self.cols:
+            return self.matrix[row][col]
+        return None  # Retorna None se a posição estiver fora dos limites
 
     def adjacent_vertical_values(self, row: int, col: int) -> (str, str):
-        """Devolve os valores imediatamente acima e abaixo,
-        respectivamente."""
-        # TODO
-        pass
+        """Devolve os valores imediatamente acima e abaixo, respectivamente."""
+        above = self.get_value(row-1, col)
+        below = self.get_value(row+1, col)
+        return (above, below)
 
     def adjacent_horizontal_values(self, row: int, col: int) -> (str, str):
-        """Devolve os valores imediatamente à esquerda e à direita,
-        respectivamente."""
-        # TODO
-        pass
+        """Devolve os valores imediatamente à esquerda e à direita, respectivamente."""
+        left = self.get_value(row, col-1)
+        right = self.get_value(row, col+1)
+        return (left, right)
 
     @staticmethod
     def parse_instance():
-        """Lê o test do standard input (stdin) que é passado como argumento
-        e retorna uma instância da classe Board.
+        """Lê o texto do standard input (stdin) e retorna uma instância da classe Board."""
+        input_lines = sys.stdin.read().splitlines()
+        matrix = [list(line.split()) for line in input_lines if line.strip()] # Verifica se a linha está vazia após rem os espaços
+        #print(input_lines)
+        #print(matrix)
+        return Board(matrix)
 
-        Por exemplo:
-            $ python3 pipe.py < test-01.txt
-
-            > from sys import stdin
-            > line = stdin.readline().split()
-        """
-        # TODO
-        pass
 
     # TODO: outros metodos da classe
 
@@ -110,4 +113,8 @@ if __name__ == "__main__":
     # Usar uma técnica de procura para resolver a instância,
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
+    board = Board.parse_instance()
+    #piece = board.adjacent_vertical_values(0, 0)
+    #print(piece)
+
     pass
