@@ -17,9 +17,17 @@ from search import (
     depth_first_tree_search,
     greedy_search,
     recursive_best_first_search,
-    iterative_deepening_search,
 )
 
+pecasT = {'FC': (0, 1, 0, 0), 'FB': (0, 0, 0, 1), 'FD': (0, 0, 1, 0), 'FE': (1, 0, 0, 0),
+            'BC': (1, 1, 1, 0), 'BB': (1, 0, 1, 1), 'BD': (0, 1, 1, 1), 'BE': (1, 1, 0, 1),
+            'VC': (1, 1, 0, 0), 'VB': (0, 0, 1, 1), 'VD': (0, 1, 1, 0), 'VE': (1, 0, 0, 1),
+            'LH': (1, 0, 1, 0), 'LV': (0, 1, 0, 1)}
+
+pecasF = {'FC': (0, 1, 0, 0), 'FB': (0, 0, 0, 1), 'FD': (0, 0, 1, 0), 'FE': (1, 0, 0, 0)}
+pecasB = {'BC': (1, 1, 1, 0), 'BB': (1, 0, 1, 1), 'BD': (0, 1, 1, 1), 'BE': (1, 1, 0, 1)}
+pecasV = {'VC': (1, 1, 0, 0), 'VB': (0, 0, 1, 1), 'VD': (0, 1, 1, 0), 'VE': (1, 0, 0, 1)}
+pecasL = {'LH': (1, 0, 1, 0), 'LV': (0, 1, 0, 1)}
 
 class PipeManiaState:
     state_id = 0
@@ -32,183 +40,217 @@ class PipeManiaState:
     def __lt__(self, other):
         return self.id < other.id
 
-    # TODO: outros metodos da classe
-
-class Piece:
-    def __init__(self, piece_type, orientation):
-        self.piece_type = piece_type
-        self.orientation = orientation
-
 class Board:
     """Representação interna de um tabuleiro de PipeMania."""
     
     def __init__(self, matrix):
         self.matrix = np.array(matrix)
         self.rows, self.cols = self.matrix.shape
-        self.colors = {}  # Dicionário para armazenar as cores das peças
-        self.is_invalid = False
+        self.is_completed = False
 
-    def get_value(self, row: int, col: int) -> Piece:
+    def get_value(self, row: int, col: int) -> tuple:
         """Devolve a peça na respetiva posição do tabuleiro."""
         if 0 <= row < self.rows and 0 <= col < self.cols:
-            piece_info = self.matrix[row][col]
-            if isinstance(piece_info, Piece):
-                return piece_info
-            # Se não for, criar uma nova instância de Piece
-            piece = Piece(piece_info[0], piece_info[1])
-            return piece
-        return None  # Retorna None se a posição estiver fora dos limites
-    
-    def get_row(self, row: int) -> list[Piece]:
-        """Devolve a linha correspondente ao índice passado como argumento."""
-        return [self.get_value(row, col) for col in range(self.cols)]
-    
-    def get_col(self, col: int) -> list[Piece]:
-        """Devolve a coluna correspondente ao índice passado como argumento."""
-        return [self.get_value(row, col) for row in range(self.rows)]
+            return self.matrix[row][col]
+        return None
 
-    def adjacent_vertical_values(self, row: int, col: int) -> tuple[Piece, Piece]:
+    def adjacent_vertical_values(self, row: int, col: int) -> tuple:
         """Devolve os valores imediatamente acima e abaixo, respectivamente."""
-        above = self.get_value(row-1, col)
-        below = self.get_value(row+1, col)
-        return (above, below)
+        return (self.get_value(row-1, col), self.get_value(row+1, col))
 
-    def adjacent_horizontal_values(self, row: int, col: int) -> tuple[Piece, Piece]:
+    def adjacent_horizontal_values(self, row: int, col: int) -> tuple:
         """Devolve os valores imediatamente à esquerda e à direita, respectivamente."""
-        left = self.get_value(row, col-1)
-        right = self.get_value(row, col+1)
-        return (left, right)
+        return (self.get_value(row, col-1), self.get_value(row, col+1))
 
     @staticmethod
     def parse_instance():
         """Lê o texto do standard input (stdin) e retorna uma instância da classe Board."""
         input_lines = sys.stdin.read().splitlines()
-        matrix = [line.split() for line in input_lines if line.strip()] # Verifica se a linha está vazia após remover os espaços
-        return Board(matrix)
-
-
-    # TODO: outros metodos da classe
-
+        matrix = [line.split() for line in input_lines if line.strip()]
+        return Board(matrix).calculate_state()
+    
     def calculate_state(self):
-        """Calcula o estado do tabuleiro."""
-        self.colors = {}  # Limpa o dicionário de cores
-        color = 1  # Começa com a cor 1
+        """Calcula os valores do estado interno, para ser usado
+        no tabuleiro inicial."""
+        self.incompatible_pieces = []
+        self.possible_pieces = [[[] for _ in range(self.cols)] for _ in range(self.rows)]
 
-        for row in range(self.rows):
-            for col in range(self.cols):
-                piece = self.get_value(row, col)
-                if piece:
-                    if (row, col) not in self.colors:
-                        self._dfs_coloring(row, col, piece, color)
-                        color += 1
 
-        # Verifica se há subconjuntos de cores
-        self.is_completed()
+        for r in range(self.rows):
+            for c in range(self.cols):
+                if not self.is_piece_compatible(r, c):
+                    self.incompatible_pieces.append((r, c))
+        
+        print(self.incompatible_pieces)
+        for i in self.incompatible_pieces:
+            print(i)
+            print(self.possible_pieces[i[0]][i[1]])
+            print(len(self.possible_pieces[i[0]][i[1]][0]))
+            if len(self.possible_pieces[i[0]][i[1]][0]) == 1:
+                self.set_piece(i[0], i[1], self.possible_pieces[i[0]][i[1]][0][0])
+                self.get_next_possible_piece(i[0], i[1])
+                self.incompatible_pieces.remove(i)
+        
+        return self
+        
+    def is_piece_compatible(self, row, col):
+        """Verifica se a peça na posição (row, col) é compatível com as peças adjacentes."""
+        # Verificar se a peça é compatível com suas peças adjacentes
+        neighbors = [
+            (self.get_value(row, col-1), 0),  # Esquerda
+            (self.get_value(row-1, col), 1),  # Cima
+            (self.get_value(row+1, col), 3),  # Baixo
+            (self.get_value(row, col+1), 2)   # Direita
+        ]
+        piece = self.get_value(row, col)
 
-    def _dfs_coloring(self, row: int, col: int, piece: Piece, color: int):
-        """Método auxiliar para colorir as peças."""
-        if (row, col) in self.colors:
-            return
-        self.colors[(row, col)] = color
+        self.corner_possibilities(row, col)
 
-        above, below = self.adjacent_vertical_values(row, col)
-        left, right = self.adjacent_horizontal_values(row, col)
+        if len(self.possible_pieces[row][col]) == 1:
+            return False
+        elif len(self.possible_pieces[row][col]) > 1:
+            return True
+        
+        if piece in pecasF:
+            pecas = pecasF
+        elif piece in pecasB:
+            pecas = pecasB
+        elif piece in pecasV:
+            pecas = pecasV
+        elif piece in pecasL:
+            pecas = pecasL
+        else:
+            return False
 
-        if above and above.piece_type == piece.piece_type:
-            self._dfs_coloring(row-1, col, above, color)
-        if below and below.piece_type == piece.piece_type:
-            self._dfs_coloring(row+1, col, below, color)
-        if left and left.piece_type == piece.piece_type:
-            self._dfs_coloring(row, col-1, left, color)
-        if right and right.piece_type == piece.piece_type:
-            self._dfs_coloring(row, col+1, right, color)
-
-    def set_piece(self, row: int, col: int, piece: str):
+        piece_connections = pecas[piece]
+        
+        for neighbor_piece, index in neighbors:
+            if neighbor_piece is not None:
+                neighbor_connections = pecasT[neighbor_piece]
+                # Verificar se a conexão é mútua (ex: direita de uma deve conectar com esquerda da outra)
+                opposite_index = (index + 2) % 4  # Acha o índice oposto
+                if piece_connections[index] != neighbor_connections[opposite_index]:
+                    return False
+        return True  # Não há orientação compatível
+    
+    def get_incompatible_pieces(self):
+        """Devolve uma lista de peças incompatíveis."""
+        return self.incompatible_pieces
+    
+    def set_piece(self, row: int, col: int, piece: tuple):
         """Coloca uma peça no tabuleiro."""
         self.matrix[row][col] = piece
 
+    def get_incompatible_pieces_count(self):
+        """Devolve o número de peças incompatíveis."""
+        return len(self.incompatible_pieces)
     
-    def get_possibilities(self, row: int, col: int):
-        """Devolve as possibilidades de peças que podem ser colocadas numa determinada posição."""
+    def get_next_incompatible_piece(self):
+        """Devolve a próxima peça incompatível."""
+        return self.incompatible_pieces[0]
+    
+    def get_possible_pieces(self, row, col):
+        """Devolve todas as possíveis peças que podem ser colocadas na posição (row, col)."""
+        return self.possible_pieces[row][col]
+    
+    def corner_possibilities(self, row, col):
+        """Devolve todas as possíveis peças que podem ser colocadas nas posições de canto."""
         piece = self.get_value(row, col)
-        if piece:
-            return []
-        
-        above, below = self.adjacent_vertical_values(row, col)
-        left, right = self.adjacent_horizontal_values(row, col)
-        possibilities = []
-        for piece in ['A', 'B', 'C', 'D', 'E']:
-            new_piece = self.get_piece_orientation(piece, above, below, left, right)
-            possibilities.append((row, col, new_piece))
-        return possibilities
 
-    def is_completed(self):
-        """Verifica se o tabuleiro está completo."""
-        unique_colors = set(self.colors.values())
-        if len(unique_colors) > 1:
-            self.is_invalid = True
+        if piece in pecasF:
+            possibilities = pecasF.copy()
+        elif piece in pecasB:
+            possibilities = pecasB.copy()
+        elif piece in pecasV:
+            possibilities = pecasV.copy()
+        elif piece in pecasL:
+            possibilities = pecasL.copy()
         else:
-            self.is_invalid = False
+            return False
+        
+        esquerda = self.get_value(row, col-1)
+        cima = self.get_value(row-1, col)
+        baixo = self.get_value(row+1, col)
+        direita = self.get_value(row, col+1)
 
-    def get_heuristic_value(self):
-        """Devolve o valor heurístico do tabuleiro."""
-        self.calculate_state()
-        return len(self.colors)
+        if esquerda is None:
+            for piece_name, connections in list(possibilities.items()):
+                if connections[0] == 1:
+                    del possibilities[piece_name]
 
-    def get_piece_orientation(piece: str, above: str, below: str, left: str, right: str) -> str:
-        """Determina a orientação correta da peça com base nas peças adjacentes."""
-        if piece[1] == 'C':  # Se a orientação atual for "C"
-            if above and above[1] == 'B':
-                return piece[0] + 'B'
-            elif below and below[1] == 'B':
-                return piece[0] + 'E'
-            elif left and left[1] == 'D':
-                return piece[0] + 'D'
-            elif right and right[1] == 'D':
-                return piece[0] + 'C'
-        elif piece[1] == 'B':  # Se a orientação atual for "B"
-            if above and above[1] == 'C':
-                return piece[0] + 'C'
-            elif below and below[1] == 'C':
-                return piece[0] + 'D'
-            elif left and left[1] == 'E':
-                return piece[0] + 'E'
-            elif right and right[1] == 'E':
-                return piece[0] + 'B'
-        elif piece[1] == 'D':  # Se a orientação atual for "D"
-            if above and above[1] == 'C':
-                return piece[0] + 'C'
-            elif below and below[1] == 'C':
-                return piece[0] + 'D'
-            elif left and left[1] == 'E':
-                return piece[0] + 'E'
-            elif right and right[1] == 'E':
-                return piece[0] + 'B'
-        elif piece[1] == 'E':  # Se a orientação atual for "E"
-            if above and above[1] == 'B':
-                return piece[0] + 'B'
-            elif below and below[1] == 'B':
-                return piece[0] + 'E'
-            elif left and left[1] == 'D':
-                return piece[0] + 'D'
-            elif right and right[1] == 'D':
-                return piece[0] + 'C'
-        return piece
+        if baixo is None:
+            for piece_name, connections in list(possibilities.items()):
+                if connections[3] == 1:
+                    del possibilities[piece_name]
 
-    def process_board(input_board: list[list[str]]) -> list[list[str]]:
-        """Processa o tabuleiro, determinando a orientação correta para cada peça."""
-        output_board = []
-        for i, row in enumerate(input_board):
-            new_row = []
-            for j, piece in enumerate(row):
-                above = input_board[i - 1][j] if i > 0 else None
-                below = input_board[i + 1][j] if i < len(input_board) - 1 else None
-                left = input_board[i][j - 1] if j > 0 else None
-                right = input_board[i][j + 1] if j < len(row) - 1 else None
-                new_piece = board.get_piece_orientation(piece, above, below, left, right)
-                new_row.append(new_piece)
-            output_board.append(new_row)
-        return output_board
+        if direita is None:
+            for piece_name, connections in list(possibilities.items()):
+                if connections[2] == 1:
+                    del possibilities[piece_name]
+
+        if cima is None:
+            for piece_name, connections in list(possibilities.items()):
+                if connections[1] == 1:
+                    del possibilities[piece_name]
+        
+        self.possible_pieces[row][col].append(list(possibilities.keys()))
+
+    
+    def action_piece(self, row, col):
+        """Devolve todas as possíveis peças que podem ser colocadas na posição (row, col)."""
+
+        neighbors = [
+            (self.get_value(row, col-1), 0),  # Esquerda
+            (self.get_value(row-1, col), 1),  # Cima
+            (self.get_value(row+1, col), 3),  # Baixo
+            (self.get_value(row, col+1), 2)   # Direita
+        ]
+
+        piece = self.get_value(row, col)
+
+        if piece in pecasF:
+            pecas = pecasF
+        elif piece in pecasB:
+            pecas = pecasB
+        elif piece in pecasV:
+            pecas = pecasV
+        elif piece in pecasL:
+            pecas = pecasL
+                    
+
+        piece_connections = pecas[piece]
+
+        for neighbor_piece, index in neighbors:
+            if neighbor_piece is None:
+                self.corner_possibilities(row, col)
+                break
+            neighbor_connections = pecasT[neighbor_piece]
+            opposite_index = (index + 2) % 4
+            # Verificar se a conexão é mútua (ex: direita de uma deve conectar com esquerda da outra)
+            if piece_connections[index] != neighbor_connections[opposite_index]:
+                # Se esta orientação for incompatível
+                for possible_piece, possible_connections in pecas.items():
+                    if possible_connections[index] == neighbor_connections[opposite_index]:
+                        self.possible_pieces[row][col].append(possible_piece) 
+    
+    def get_next_possible_piece(self, row, col):
+        """Recebe a posição que foi alterada, de forma a atualizar os valores
+        possíveis para as posições afetadas"""
+        if row and col is None:
+            return None
+
+        neighbors = [
+            (self.get_value(row, col-1), 0),  # Esquerda
+            (self.get_value(row-1, col), 1),  # Cima
+            (self.get_value(row+1, col), 3),  # Baixo
+            (self.get_value(row, col+1), 2)   # Direita
+        ]
+
+        for neighbor_piece, index in neighbors:
+            if neighbor_piece is not None:
+                self.action_piece(row, col)
+
+        return self.possible_pieces[row][col]
 
 
 class PipeMania(Problem):
@@ -221,35 +263,30 @@ class PipeMania(Problem):
     def actions(self, state: PipeManiaState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
-        if state.board.is_invalid or state.board.is_completed():
+        if state.board.get_incompatible_pieces_count() == 0:
             return []
-        
-        rows, cols = state.board.rows, state.board.cols
 
-        possibilites = state.board.get_possibilities(rows, cols)
-        return possibilites
+        row , col = state.board.get_next_incompatible_piece()
+        possibilities = state.board.get_next_possible_piece(row, col)
+        print(possibilities)
+        return map(lambda piece: (row, col, piece), possibilities)
 
     def result(self, state: PipeManiaState, action):
         """Retorna o estado resultante de executar a 'action' sobre
         'state' passado como argumento. A ação a executar deve ser uma
         das presentes na lista obtida pela execução de
         self.actions(state)."""
-
         (row, col, piece) = action
-        return PipeManiaState(state.board.place_piece(row, col, piece))
+        return PipeManiaState(state.board.set_piece(row, col, piece))
 
     def goal_test(self, state: PipeManiaState):
         """Retorna True se e só se o estado passado como argumento é
         um estado objetivo. Deve verificar se todas as posições do tabuleiro
         estão preenchidas de acordo com as regras do problema."""
-        return state.board.is_invalid
-
-    def h(self, node: Node):
-        """Função heuristica utilizada para a procura A*."""
-        board = node.state.board
-        return board.get_heuristic_value()
-
-    # TODO: outros metodos da classe
+        return state.board.get_incompatible_pieces_count() == 0
+    
+    def h(self, node):
+        pass
 
 
 if __name__ == "__main__":
@@ -259,8 +296,6 @@ if __name__ == "__main__":
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
     board = Board.parse_instance()
-    pipe = PipeMania(board)
-    goal_node = iterative_deepening_search(pipe)
-    solution = goal_node.solution()
-
-    pass
+    problem = PipeMania(board)
+    print(board.matrix)
+    
