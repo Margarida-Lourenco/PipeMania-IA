@@ -54,13 +54,15 @@ class Board:
             return self.matrix[row][col]
         return None
 
-    def adjacent_vertical_values(self, row: int, col: int) -> tuple:
-        """Devolve os valores imediatamente acima e abaixo, respectivamente."""
-        return (self.get_value(row-1, col), self.get_value(row+1, col))
-
-    def adjacent_horizontal_values(self, row: int, col: int) -> tuple:
-        """Devolve os valores imediatamente à esquerda e à direita, respectivamente."""
-        return (self.get_value(row, col-1), self.get_value(row, col+1))
+    def get_neighbors(self, row, col):
+        """Retorna uma lista de tuplas contendo os valores dos vizinhos e seus índices de direção."""
+        neighbors = [
+            (self.get_value(row, col-1), 0),  # Esquerda
+            (self.get_value(row-1, col), 1),  # Cima
+            (self.get_value(row, col+1), 2),  # Direita
+            (self.get_value(row+1, col), 3)   # Baixo
+        ]
+        return neighbors
 
     @staticmethod
     def parse_instance():
@@ -73,53 +75,40 @@ class Board:
         """Calcula os valores do estado interno, para ser usado
         no tabuleiro inicial."""
         self.incompatible_pieces = []
-        self.possible_pieces = [[[] for _ in range(self.cols)] for _ in range(self.rows)]
-
+        self.possible_pieces = {(r, c): [] for r in range(self.rows) for c in range(self.cols)}
 
         for r in range(self.rows):
             for c in range(self.cols):
-                if not self.is_piece_compatible(r, c):
+                if self.is_piece_compatible(r, c):
                     self.incompatible_pieces.append((r, c))
-        
+
         print(self.incompatible_pieces)
         for i in self.incompatible_pieces:
             print(i)
-            print(self.possible_pieces[i[0]][i[1]])
-            print(len(self.possible_pieces[i[0]][i[1]][0]))
-            if len(self.possible_pieces[i[0]][i[1]][0]) == 1:
-                self.set_piece(i[0], i[1], self.possible_pieces[i[0]][i[1]][0][0])
+            print(self.possible_pieces[i])
+            print(len(self.possible_pieces[i]))
+            if len(self.possible_pieces[i]) == 1:
+                self.set_piece(i[0], i[1], self.possible_pieces[i][0])
                 self.get_next_possible_piece(i[0], i[1])
                 self.incompatible_pieces.remove(i)
-        
+
         return self
-        
+    
     def is_piece_compatible(self, row, col):
         """Verifica se a peça na posição (row, col) é compatível com as peças adjacentes."""
         # Verificar se a peça é compatível com suas peças adjacentes
-        neighbors = [
-            (self.get_value(row, col-1), 0),  # Esquerda
-            (self.get_value(row-1, col), 1),  # Cima
-            (self.get_value(row+1, col), 3),  # Baixo
-            (self.get_value(row, col+1), 2)   # Direita
-        ]
+        neighbors = self.get_neighbors(row, col)
+
         piece = self.get_value(row, col)
 
         self.corner_possibilities(row, col)
 
-        if len(self.possible_pieces[row][col]) == 1:
-            return False
-        elif len(self.possible_pieces[row][col]) > 1:
+        if len(self.possible_pieces[(row, col)]) <= 1:
             return True
-        
-        if piece in pecasF:
-            pecas = pecasF
-        elif piece in pecasB:
-            pecas = pecasB
-        elif piece in pecasV:
-            pecas = pecasV
-        elif piece in pecasL:
-            pecas = pecasL
-        else:
+
+        pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV \
+            if piece in pecasV else pecasL if piece in pecasL else None
+        if pecas is None:
             return False
 
         piece_connections = pecas[piece]
@@ -129,9 +118,9 @@ class Board:
                 neighbor_connections = pecasT[neighbor_piece]
                 # Verificar se a conexão é mútua (ex: direita de uma deve conectar com esquerda da outra)
                 opposite_index = (index + 2) % 4  # Acha o índice oposto
-                if piece_connections[index] != neighbor_connections[opposite_index]:
-                    return False
-        return True  # Não há orientação compatível
+                if piece_connections[index] == neighbor_connections[opposite_index]:
+                    return True
+        return False  # Não há orientação compatível
     
     def get_incompatible_pieces(self):
         """Devolve uma lista de peças incompatíveis."""
@@ -156,68 +145,49 @@ class Board:
     def corner_possibilities(self, row, col):
         """Devolve todas as possíveis peças que podem ser colocadas nas posições de canto."""
         piece = self.get_value(row, col)
-
         if piece in pecasF:
-            possibilities = pecasF.copy()
+            possibilities = pecasF
         elif piece in pecasB:
-            possibilities = pecasB.copy()
+            possibilities = pecasB
         elif piece in pecasV:
-            possibilities = pecasV.copy()
+            possibilities = pecasV
         elif piece in pecasL:
-            possibilities = pecasL.copy()
+            possibilities = pecasL
         else:
             return False
         
-        esquerda = self.get_value(row, col-1)
-        cima = self.get_value(row-1, col)
-        baixo = self.get_value(row+1, col)
-        direita = self.get_value(row, col+1)
+        neighbors = self.get_neighbors(row, col)
+        esquerda, cima, direita, baixo = [neighbor[0] for neighbor in neighbors]
 
         if esquerda is None:
-            for piece_name, connections in list(possibilities.items()):
-                if connections[0] == 1:
-                    del possibilities[piece_name]
-
+            possibilities = {piece_name: connections for piece_name, connections \
+                             in possibilities.items() if connections[0] != 1}
         if baixo is None:
-            for piece_name, connections in list(possibilities.items()):
-                if connections[3] == 1:
-                    del possibilities[piece_name]
-
+            possibilities = {piece_name: connections for piece_name, connections \
+                             in possibilities.items() if connections[3] != 1}
         if direita is None:
-            for piece_name, connections in list(possibilities.items()):
-                if connections[2] == 1:
-                    del possibilities[piece_name]
-
+            possibilities = {piece_name: connections for piece_name, connections \
+                             in possibilities.items() if connections[2] != 1}
         if cima is None:
-            for piece_name, connections in list(possibilities.items()):
-                if connections[1] == 1:
-                    del possibilities[piece_name]
+            possibilities = {piece_name: connections for piece_name, connections \
+                             in possibilities.items() if connections[1] != 1}
         
-        self.possible_pieces[row][col].append(list(possibilities.keys()))
+        self.possible_pieces[(row, col)].extend(list(possibilities.keys()))
 
     
     def action_piece(self, row, col):
         """Devolve todas as possíveis peças que podem ser colocadas na posição (row, col)."""
 
-        neighbors = [
-            (self.get_value(row, col-1), 0),  # Esquerda
-            (self.get_value(row-1, col), 1),  # Cima
-            (self.get_value(row+1, col), 3),  # Baixo
-            (self.get_value(row, col+1), 2)   # Direita
-        ]
+        neighbors = self.get_neighbors(row, col)
 
         piece = self.get_value(row, col)
 
-        if piece in pecasF:
-            pecas = pecasF
-        elif piece in pecasB:
-            pecas = pecasB
-        elif piece in pecasV:
-            pecas = pecasV
-        elif piece in pecasL:
-            pecas = pecasL
-                    
+        pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV \
+            if piece in pecasV else pecasL if piece in pecasL else None
 
+        if pecas is None:
+            return
+                   
         piece_connections = pecas[piece]
 
         for neighbor_piece, index in neighbors:
@@ -231,7 +201,7 @@ class Board:
                 # Se esta orientação for incompatível
                 for possible_piece, possible_connections in pecas.items():
                     if possible_connections[index] == neighbor_connections[opposite_index]:
-                        self.possible_pieces[row][col].append(possible_piece) 
+                        self.possible_pieces[(row, col)].extend(possible_piece)
     
     def get_next_possible_piece(self, row, col):
         """Recebe a posição que foi alterada, de forma a atualizar os valores
@@ -239,19 +209,13 @@ class Board:
         if row and col is None:
             return None
 
-        neighbors = [
-            (self.get_value(row, col-1), 0),  # Esquerda
-            (self.get_value(row-1, col), 1),  # Cima
-            (self.get_value(row+1, col), 3),  # Baixo
-            (self.get_value(row, col+1), 2)   # Direita
-        ]
+        neighbors = self.get_neighbors(row, col)
 
         for neighbor_piece, index in neighbors:
             if neighbor_piece is not None:
                 self.action_piece(row, col)
 
-        return self.possible_pieces[row][col]
-
+        return self.possible_pieces[(row, col)]
 
 class PipeMania(Problem):
     def __init__(self, board: Board):
@@ -268,7 +232,6 @@ class PipeMania(Problem):
 
         row , col = state.board.get_next_incompatible_piece()
         possibilities = state.board.get_next_possible_piece(row, col)
-        print(possibilities)
         return map(lambda piece: (row, col, piece), possibilities)
 
     def result(self, state: PipeManiaState, action):
@@ -298,4 +261,3 @@ if __name__ == "__main__":
     board = Board.parse_instance()
     problem = PipeMania(board)
     print(board.matrix)
-    
