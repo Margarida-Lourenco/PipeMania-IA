@@ -24,9 +24,9 @@ pecasT = {'FC': (0, 1, 0, 0), 'FB': (0, 0, 0, 1), 'FD': (0, 0, 1, 0), 'FE': (1, 
             'VC': (1, 1, 0, 0), 'VB': (0, 0, 1, 1), 'VD': (0, 1, 1, 0), 'VE': (1, 0, 0, 1),
             'LH': (1, 0, 1, 0), 'LV': (0, 1, 0, 1)}
 
-pecasF = {'FC': (0, 1, 0, 0), 'FB': (0, 0, 0, 1), 'FD': (0, 0, 1, 0), 'FE': (1, 0, 0, 0)}
-pecasB = {'BC': (1, 1, 1, 0), 'BB': (1, 0, 1, 1), 'BD': (0, 1, 1, 1), 'BE': (1, 1, 0, 1)}
-pecasV = {'VC': (1, 1, 0, 0), 'VB': (0, 0, 1, 1), 'VD': (0, 1, 1, 0), 'VE': (1, 0, 0, 1)}
+pecasF = {'FE': (1, 0, 0, 0), 'FC': (0, 1, 0, 0), 'FD': (0, 0, 1, 0), 'FB': (0, 0, 0, 1)}
+pecasB = {'BE': (1, 1, 0, 1), 'BC': (1, 1, 1, 0), 'BD': (0, 1, 1, 1), 'BB': (1, 0, 1, 1)}
+pecasV = {'VE': (1, 0, 0, 1), 'VC': (1, 1, 0, 0), 'VD': (0, 1, 1, 0), 'VB': (0, 0, 1, 1)}
 pecasL = {'LH': (1, 0, 1, 0), 'LV': (0, 1, 0, 1)}
 
 class PipeManiaState:
@@ -46,7 +46,10 @@ class Board:
     def __init__(self, matrix):
         self.matrix = np.array(matrix)
         self.rows, self.cols = self.matrix.shape
-        self.is_invalid = False
+
+    def print_matrix(self):
+        for row in self.matrix:
+            print("\t".join(str(item) for item in row))
 
     def get_value(self, row: int, col: int) -> tuple:
         """Devolve a peça na respetiva posição do tabuleiro."""
@@ -72,8 +75,7 @@ class Board:
         return Board(matrix).calculate_state()
     
     def calculate_state(self):
-        """Calcula os valores do estado interno, para ser usado
-        no tabuleiro inicial."""
+        """Calcula os valores do estado interno, para ser usado no tabuleiro inicial."""
         self.incompatible_pieces = []
         self.possible_pieces = {(r, c): [] for r in range(self.rows) for c in range(self.cols)}
 
@@ -83,17 +85,23 @@ class Board:
                 if len(self.possible_pieces[(r, c)]) > 1:
                     self.incompatible_pieces.append((r, c))
                 elif len(self.possible_pieces[(r, c)]) == 0:
-                    self.is_invalid = True
                     return self
                 else:
                     self.incompatible_pieces.insert(0, (r, c))
 
         return self
-    
+ 
     def set_piece(self, row: int, col: int, piece: tuple):
         """Coloca uma peça no tabuleiro."""
         self.matrix[row][col] = piece
+        if len(self.possible_pieces[(row, col)]) == 0:
+            return self
+        
+        elif len(self.possible_pieces[(row, col)]) == 1:
+            self.incompatible_pieces.remove((row, col))
 
+        self.action_piece(row, col)
+        
     def get_incompatible_pieces_count(self):
         """Devolve o número de peças incompatíveis."""
         return len(self.incompatible_pieces)
@@ -104,57 +112,61 @@ class Board:
     
     def get_possible_pieces(self, row, col):
         """Devolve todas as possíveis peças que podem ser colocadas na posição (row, col)."""
-        return self.possible_pieces[row][col]
+        return self.possible_pieces[(row, col)]
     
     def action_piece(self, row, col):
-        """Retorna as possíveis configurações de uma peça incompatível que se encaixam onde há espaços vazios adjacentes."""
-        neighbors = self.get_neighbors(row, col)  # Lista de peças adjacentes [topo, direita, baixo, esquerda]
+        """Determina as possíveis configurações de uma peça, dependendo da posição no tabuleiro."""
+        neighbors = self.get_neighbors(row, col)  # Lista de peças adjacentes
 
-        piece = self.get_value(row, col)  # Tipo da peça na posição atual
+        if any(neighbor_piece is None for neighbor_piece, _ in neighbors):
+            self.action_piece_edge(row, col, neighbors)
+        else:
+            self.action_piece_middle(row, col, neighbors)
+
+    def action_piece_edge(self, row, col, neighbors):
+        """Determina as possíveis configurações de uma peça nas bordas do tabuleiro."""
+        piece = self.get_value(row, col)
         pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV \
             if piece in pecasV else pecasL if piece in pecasL else None
 
-        for orientation in pecas:
+        for piece_name, orientation in pecas.items():
             is_compatible = True
-            for index, (neighbor_piece, _) in enumerate(neighbors):
+            for _, (neighbor_piece, index) in enumerate(neighbors):
                 if neighbor_piece is None:
-                    # Se o vizinho é None, a conexão nesta direção deve ser '0'
-                    if orientation[index] != 0:
+                    # Verifica apenas as conexões que são None
+                    if orientation[index] == 1:
                         is_compatible = False
                         break
+
+            if is_compatible and piece != piece_name:
+                self.possible_pieces[(row, col)].append(piece_name)
+
+
+    def action_piece_middle(self, row, col, neighbors):
+        """Determina as possíveis configurações de uma peça no meio do tabuleiro."""
+        piece = self.get_value(row, col)
+        pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV \
+            if piece in pecasV else pecasL if piece in pecasL else None
+
+        for piece_name, orientation in pecas.items():
+            is_compatible = True
+            for _, (neighbor_piece, index) in enumerate(neighbors):
+                if neighbor_piece is None:
+                    continue  # Não faz verificação, pois estamos no meio do tabuleiro
                 else:
-                    # Caso contrário, se tem vizinho, deve verificar a compatibilidade
                     neighbor_connections = pecasT[neighbor_piece]
                     opposite_index = (index + 2) % 4
                     if orientation[index] != neighbor_connections[opposite_index]:
                         is_compatible = False
                         break
 
-            if is_compatible:
-                self.possible_pieces[(row, col)].extend(orientation)
-    
-    def calculate_next_possible_piece(self, row, col):
-        """Recebe a posição que foi alterada, de forma a atualizar os valores
-        possíveis para as posições afetadas"""
-        adjacent_positions = [
-            (row, col-1),  # Esquerda
-            (row-1, col),  # Cima
-            (row, col+1),  # Direita
-            (row+1, col)   # Baixo
-        ]
-
-        for r, c in adjacent_positions:
-            if 0 <= r < self.rows and 0 <= c < self.cols:
-                # Atualiza os valores possíveis para a posição afetada
-                self.action_piece(r, c)
-                if len(self.possible_pieces[(r, c)]) ==  0:
-                    self.is_invalid = True
-                    return
-
-                if len(self.possible_pieces[(r, c)]) == 1:
-                    self.incompatible_pieces.remove((r, c))
-                    self.incompatible_pieces.insert(0, (r, c))
-                
+            if is_compatible and piece != piece_name:
+                self.possible_pieces[(row, col)].append(piece_name)
+        
+        if len(self.possible_pieces[(row, col)]) == 0:
+            for piece_name, _ in pecas.items():
+                self.possible_pieces[(row, col)].append(piece_name)
+            
 
 class PipeMania(Problem):
     def __init__(self, board: Board):
@@ -189,7 +201,10 @@ class PipeMania(Problem):
         return state.board.get_incompatible_pieces_count() == 0
     
     def h(self, node):
-        pass
+        if node.state.board:
+            return node.state.board.get_incompatible_pieces_count()
+        else:
+            return 0
 
 
 if __name__ == "__main__":
@@ -200,4 +215,5 @@ if __name__ == "__main__":
     # Imprimir para o standard output no formato indicado.
     board = Board.parse_instance()
     problem = PipeMania(board)
-    print(board.matrix)
+    goal_node = astar_search(problem)
+    goal_node.state.board.print_matrix()
