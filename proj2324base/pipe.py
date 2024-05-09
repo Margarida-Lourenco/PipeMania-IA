@@ -154,10 +154,7 @@ class Board:
                         if orientation[index] == 1:
                             is_compatible = False
                             break
-                    elif neighbor_piece not in self.incompatible_pieces:
-                        #print(self.incompatible_pieces)
-                        print(f"Peça incompatível na posição ({row}, {col})")
-                        print(neighbor_piece)
+                    else: #neighbor_piece not in self.incompatible_pieces:     se tiver in self.incompatible_pieces funciona para o teste 5 mas nao para os outros
                         # Verifique a compatibilidade com peças vizinhas apenas se não estiver na lista de peças impossíveis
                         neighbors_connections = pecasT[neighbor_piece]
                         opposite_index = (index + 2) % 4
@@ -169,20 +166,6 @@ class Board:
                     self.matrix[row][col] = piece_name
                     assigned = True
 
-        elif len(none_neighbors) == 0:
-            pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else None
-            for piece_name, orientation in pecas.items():
-                is_compatible = True
-                for neighbor_piece, neighbor_index in neighbors:
-                    neighbor_connections = pecasT[neighbor_piece]
-                    opposite_index = (neighbor_index + 2) % 4
-                    if orientation[neighbor_index] != neighbor_connections[opposite_index]:
-                        is_compatible = False
-                        break
-
-                if is_compatible:
-                    self.matrix[row][col] = piece_name
-                    assigned = True
         else:
             pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else None
             for piece_name, orientation in pecas.items():
