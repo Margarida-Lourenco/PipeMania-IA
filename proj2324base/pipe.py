@@ -113,6 +113,18 @@ class Board:
     def get_possible_pieces(self, row, col):
         """Devolve todas as possíveis peças que podem ser colocadas na posição (row, col)."""
         return self.possible_pieces[(row, col)]
+    
+    def determine_neighbor_position(self, row, col, index):
+        """Determina a posição do vizinho com base no índice."""
+        if index == 0:  # Esquerda
+            return row, col-1 if col-1 >= 0 else None
+        elif index == 1:  # Cima
+            return row-1, col if row-1 >= 0 else None
+        elif index == 2:  # Direita
+            return row, col+1 if col+1 < self.cols else None
+        elif index == 3:  # Baixo
+            return row+1, col if row+1 < self.rows else None
+
 
     def first_action_piece(self, row, col, neighbors):
         """Determina as possíveis configurações de uma peça nas bordas do tabuleiro."""
@@ -129,10 +141,11 @@ class Board:
                         break
                 if is_compatible:
                     self.matrix[row][col] = piece_name
-                    assigned = True
+                    self.possible_pieces[(row, col)].append(piece_name)
 
-        elif piece in pecasL and len(none_neighbors) == 1:
-            for piece_name, orientation in pecasL.items():
+        elif (piece in pecasL or piece in pecasB) and len(none_neighbors) == 1:
+            pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else None
+            for piece_name, orientation in pecas.items():
                 is_compatible = True
                 for _, index in none_neighbors:
                     if orientation[index] == 1:
@@ -140,60 +153,28 @@ class Board:
                         break
                 if is_compatible:
                     self.matrix[row][col] = piece_name
-                    assigned = True  
+                    self.possible_pieces[(row, col)].append(piece_name) 
         
-        elif piece in pecasB and len(none_neighbors) == 1:
-            for piece_name, orientation in pecasB.items():
-                is_compatible = True
-                for neighbor_piece, index in none_neighbors:
-                    if orientation[index] == 1:
-                        is_compatible = False
-                        break
-                if is_compatible:
-                    self.matrix[row][col] = piece_name
-                    assigned = True
         
-        elif piece in pecasF:
-            for piece_name, orientation in pecasF.items():
-                is_compatible = True  # Inicialize como True no início de cada iteração
-                for neighbor_piece, index in neighbors:
-                    if neighbor_piece is None:
-                        # Verifique se há uma conexão onde não deveria haver
-                        if orientation[index] == 1:
-                            is_compatible = False
-                            break
-                    elif neighbor_piece not in self.incompatible_pieces:
-                        # Verifique a compatibilidade com peças vizinhas apenas se não estiver na lista de peças impossíveis
-                        neighbors_connections = pecasT[neighbor_piece]
-                        opposite_index = (index + 2) % 4
-                        if orientation[index] != neighbors_connections[opposite_index]:
-                            is_compatible = False
-                            break
-                                
-                if is_compatible:
-                    self.matrix[row][col] = piece_name
-                    assigned = True
-
-        elif len(none_neighbors) == 0:
-            pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else None
-            for piece_name, orientation in pecas.items():
-                is_compatible = True
-                for neighbor_piece, neighbor_index in neighbors:
-                    neighbor_connections = pecasT[neighbor_piece]
-                    opposite_index = (neighbor_index + 2) % 4
-                    if orientation[neighbor_index] != neighbor_connections[opposite_index]:
-                        is_compatible = False
-                        break
-
-                if is_compatible:
-                    self.matrix[row][col] = piece_name
-                    assigned = True
         else:
-            pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else None
+            pecas = pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else pecasF if piece in pecasF else None
             for piece_name, orientation in pecas.items():
                 is_compatible = True
                 for neighbor_piece, neighbor_index in neighbors:
-                    if neighbor_piece is not None:
+
+                    if neighbor_piece is None:
+                        if orientation[neighbor_index] == 1:
+                            is_compatible = False   
+
+                    elif piece_name in pecasF and neighbor_piece in pecasF:
+                        neighbor_connections = pecasF[neighbor_piece]
+                        opposite_index = (neighbor_index + 2) % 4
+
+                        if orientation[neighbor_index] == neighbor_connections[opposite_index] == 1:      
+                            is_compatible = False
+                            break
+    
+                    elif neighbor_piece in self.possible_pieces[self.determine_neighbor_position(row, col, neighbor_index)]:
                         neighbor_connections = pecasT[neighbor_piece]
                         opposite_index = (neighbor_index + 2) % 4
                         if piece_name in pecasF and neighbor_piece in pecasF and orientation[neighbor_index] == neighbor_connections[opposite_index] == 1:
