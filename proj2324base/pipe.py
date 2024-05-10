@@ -66,6 +66,17 @@ class Board:
             (self.get_value(row+1, col), 3)   # Baixo
         ]
         return neighbors
+    
+    def determine_neighbor_position(self, row, col, index):
+        """Determina a posição do vizinho com base no índice."""
+        if index == 0:  # Esquerda
+            return row, col-1 if col-1 >= 0 else None
+        elif index == 1:  # Cima
+            return row-1, col if row-1 >= 0 else None
+        elif index == 2:  # Direita
+            return row, col+1 if col+1 < self.cols else None
+        elif index == 3:  # Baixo
+            return row+1, col if row+1 < self.rows else None
 
     @staticmethod
     def parse_instance():
@@ -82,8 +93,58 @@ class Board:
         for r in range(self.rows):
             for c in range(self.cols):
                 neighbors = self.get_neighbors(r, c) 
-                self.first_action(r, c, neighbors)
-   
+                piece = self.get_value(r, c)
+        
+                none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
+
+                if (piece in pecasV and len(none_neighbors) == 2) or ((piece in pecasL or piece in pecasB) and len(none_neighbors) == 1):
+                    pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else None
+                    for piece_name, orientation in pecas.items():
+                        is_compatible = True
+                        for _, index in none_neighbors:
+                            if orientation[index] == 1:
+                                is_compatible = False
+                                break
+                        if is_compatible:
+                            self.matrix[r][c] = piece_name
+                            self.possible_pieces[(r, c)].append(piece_name)
+                
+                else:
+                    pecas = pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else pecasF if piece in pecasF else None
+                    for piece_name, orientation in pecas.items():
+                        is_compatible = True
+                        for neighbor_piece, neighbor_index in neighbors:
+
+                            if neighbor_piece is None:
+                                if orientation[neighbor_index] == 1:
+                                    is_compatible = False   
+
+                            elif piece_name in pecasF and neighbor_piece in pecasF:
+                                neighbor_connections = pecasF[neighbor_piece]
+                                opposite_index = (neighbor_index + 2) % 4
+
+                                if orientation[neighbor_index] == neighbor_connections[opposite_index] == 1:      
+                                    is_compatible = False
+            
+                            elif neighbor_piece in self.possible_pieces[self.determine_neighbor_position(r, c, neighbor_index)]\
+                                and len(self.possible_pieces[self.determine_neighbor_position(r, c, neighbor_index)]) == 1:
+                                neighbor_connections = pecasT[neighbor_piece]
+                                opposite_index = (neighbor_index + 2) % 4
+                                if (piece_name in pecasF and neighbor_piece in pecasF) and orientation[neighbor_index] == 1:
+                                    is_compatible = False
+
+                                elif orientation[neighbor_index] != neighbor_connections[opposite_index]:
+                                    is_compatible = False
+
+                        if is_compatible:
+                            self.possible_pieces[(r, c)].append(piece_name)
+
+                
+                if len(self.possible_pieces[(r, c)]) > 1 or len(self.possible_pieces[(r, c)]) == 0:
+                    self.incompatible_pieces.append((r, c))
+                else:
+                    self.matrix[r][c] = self.possible_pieces[(r, c)][0]
+        
         return self
  
     def set_piece(self, row: int, col: int, piece: tuple):
@@ -91,14 +152,14 @@ class Board:
         matrix2 = self.matrix.copy()
         matrix2[row][col] = piece
 
+        if len(self.possible_pieces[(row, col)]) == 1:
+            self.incompatible_pieces.remove((row, col))
+
         # Criar uma nova instância de Board com a matriz atualizada
         new_board = Board(matrix2)
 
         new_board.possible_pieces = self.possible_pieces.copy()
         new_board.incompatible_pieces = self.incompatible_pieces.copy()
-
-        if len(new_board.possible_pieces[(row, col)]) == 1:
-            new_board.incompatible_pieces.remove((row, col))
 
         return new_board
         
@@ -113,103 +174,31 @@ class Board:
     def get_possible_pieces(self, row, col):
         """Devolve todas as possíveis peças que podem ser colocadas na posição (row, col)."""
         return self.possible_pieces[(row, col)]
-    
-    def determine_neighbor_position(self, row, col, index):
-        """Determina a posição do vizinho com base no índice."""
-        if index == 0:  # Esquerda
-            return row, col-1 if col-1 >= 0 else None
-        elif index == 1:  # Cima
-            return row-1, col if row-1 >= 0 else None
-        elif index == 2:  # Direita
-            return row, col+1 if col+1 < self.cols else None
-        elif index == 3:  # Baixo
-            return row+1, col if row+1 < self.rows else None
-
-
-    def first_action(self, row, col, neighbors):
-        """Determina as possíveis configurações de uma peça do tabuleiro."""
-        piece = self.get_value(row, col)
- 
-        none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
-
-        if (piece in pecasV and len(none_neighbors) == 2) or ((piece in pecasL or piece in pecasB) and len(none_neighbors) == 1):
-            pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else None
-            for piece_name, orientation in pecas.items():
-                is_compatible = True
-                for _, index in none_neighbors:
-                    if orientation[index] == 1:
-                        is_compatible = False
-                        break
-                if is_compatible:
-                    self.matrix[row][col] = piece_name
-                    self.possible_pieces[(row, col)].append(piece_name)
-        
-        else:
-            pecas = pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else pecasF if piece in pecasF else None
-            for piece_name, orientation in pecas.items():
-                is_compatible = True
-                for neighbor_piece, neighbor_index in neighbors:
-
-                    if neighbor_piece is None:
-                        if orientation[neighbor_index] == 1:
-                            is_compatible = False   
-
-                    elif piece_name in pecasF and neighbor_piece in pecasF:
-                        neighbor_connections = pecasF[neighbor_piece]
-                        opposite_index = (neighbor_index + 2) % 4
-
-                        if orientation[neighbor_index] == neighbor_connections[opposite_index] == 1:      
-                            is_compatible = False
-    
-                    elif neighbor_piece in self.possible_pieces[self.determine_neighbor_position(row, col, neighbor_index)]\
-                        and len(self.possible_pieces[self.determine_neighbor_position(row, col, neighbor_index)]) == 1:
-                        neighbor_connections = pecasT[neighbor_piece]
-                        opposite_index = (neighbor_index + 2) % 4
-                        if (piece_name in pecasF and neighbor_piece in pecasF) and orientation[neighbor_index] == 1:
-                            is_compatible = False
-
-                        elif orientation[neighbor_index] != neighbor_connections[opposite_index]:
-                            is_compatible = False
-
-                if is_compatible:
-                    self.possible_pieces[(row, col)].append(piece_name)
-
-        
-        if len(self.possible_pieces[(row, col)]) > 1 or len(self.possible_pieces[(row, col)]) == 0:
-            self.incompatible_pieces.append((row, col))
-        else:
-            self.matrix[row][col] = self.possible_pieces[(row, col)][0]
-
-        print(self.possible_pieces)
-
 
     def action_piece(self, row, col):
-        """Determina as possíveis configurações de uma peça no meio do tabuleiro, considerando apenas os vizinhos que não estão em self.incompatible_pieces."""
-        piece = self.get_value(row, col)
-        pecas = pecasF if piece in pecasF else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else None
+        """Determina ações possíveis para a peça na posição (row, col)."""
+        filtered_neighbors = []
 
-        neighbors = self.get_neighbors(row, col)
+        for i in range(4):
+            if None not in self.determine_neighbor_position(row, col, i):
+                if len(self.possible_pieces[self.determine_neighbor_position(row, col, i)]) == 1:
+                    filtered_neighbors.append((self.possible_pieces[self.determine_neighbor_position(row, col, i)][0], i))
 
-        filtered_neighbors = [
-            (neighbor_piece, i) for i, (neighbor_piece, _) in enumerate(neighbors)
-            if self.determine_neighbor_position(row, col, i) is col is not None and row is not None  # Verifica se a posição do vizinho é válida
-            and len(self.possible_pieces[self.determine_neighbor_position(row, col, i)]) == 1  # Verifica se há apenas uma possibilidade de peça
-        ]
-        #print(piece)
-
-        for piece_name, orientation in pecas.items():
+        
+        print(filtered_neighbors)
+        for piece in self.possible_pieces[(row, col)]:
+            print(piece)
             is_compatible = True
-            # Verifica a compatibilidade com vizinhos filtrados
-            for neighbor_piece, neighbor_index in filtered_neighbors:
+            for neighbor_piece, index in filtered_neighbors:
                 neighbor_connections = pecasT[neighbor_piece]
-                opposite_index = (neighbor_index + 2) % 4
-                if orientation[neighbor_index] != neighbor_connections[opposite_index]:
+                opposite_index = (index + 2) % 4
+                if pecasT[piece][index] != neighbor_connections[opposite_index]:
                     is_compatible = False
                     break
 
-            if is_compatible:
-                self.possible_pieces[(row, col)].append(piece_name)
-                #print(self.possible_pieces)
+            if not is_compatible:
+                self.possible_pieces[(row, col)].remove(piece)
+                
         return self.possible_pieces[(row, col)]
 
 class PipeMania(Problem):
