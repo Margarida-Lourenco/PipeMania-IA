@@ -82,7 +82,7 @@ class Board:
         for r in range(self.rows):
             for c in range(self.cols):
                 neighbors = self.get_neighbors(r, c) 
-                self.first_action_piece(r, c, neighbors)
+                self.first_action(r, c, neighbors)
    
         return self
  
@@ -126,25 +126,14 @@ class Board:
             return row+1, col if row+1 < self.rows else None
 
 
-    def first_action_piece(self, row, col, neighbors):
-        """Determina as possíveis configurações de uma peça nas bordas do tabuleiro."""
+    def first_action(self, row, col, neighbors):
+        """Determina as possíveis configurações de uma peça do tabuleiro."""
         piece = self.get_value(row, col)
  
         none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
 
-        if piece in pecasV and len(none_neighbors) == 2:
-            for piece_name, orientation in pecasV.items():
-                is_compatible = True
-                for _, index in none_neighbors:
-                    if orientation[index] == 1:
-                        is_compatible = False
-                        break
-                if is_compatible:
-                    self.matrix[row][col] = piece_name
-                    self.possible_pieces[(row, col)].append(piece_name)
-
-        elif (piece in pecasL or piece in pecasB) and len(none_neighbors) == 1:
-            pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else None
+        if (piece in pecasV and len(none_neighbors) == 2) or ((piece in pecasL or piece in pecasB) and len(none_neighbors) == 1):
+            pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else None
             for piece_name, orientation in pecas.items():
                 is_compatible = True
                 for _, index in none_neighbors:
@@ -153,8 +142,7 @@ class Board:
                         break
                 if is_compatible:
                     self.matrix[row][col] = piece_name
-                    self.possible_pieces[(row, col)].append(piece_name) 
-        
+                    self.possible_pieces[(row, col)].append(piece_name)
         
         else:
             pecas = pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else pecasF if piece in pecasF else None
@@ -172,12 +160,12 @@ class Board:
 
                         if orientation[neighbor_index] == neighbor_connections[opposite_index] == 1:      
                             is_compatible = False
-                            break
     
-                    elif neighbor_piece in self.possible_pieces[self.determine_neighbor_position(row, col, neighbor_index)]:
+                    elif neighbor_piece in self.possible_pieces[self.determine_neighbor_position(row, col, neighbor_index)]\
+                        and len(self.possible_pieces[self.determine_neighbor_position(row, col, neighbor_index)]) == 1:
                         neighbor_connections = pecasT[neighbor_piece]
                         opposite_index = (neighbor_index + 2) % 4
-                        if piece_name in pecasF and neighbor_piece in pecasF and orientation[neighbor_index] == neighbor_connections[opposite_index] == 1:
+                        if (piece_name in pecasF and neighbor_piece in pecasF) and orientation[neighbor_index] == 1:
                             is_compatible = False
 
                         elif orientation[neighbor_index] != neighbor_connections[opposite_index]:
@@ -191,6 +179,8 @@ class Board:
             self.incompatible_pieces.append((row, col))
         else:
             self.matrix[row][col] = self.possible_pieces[(row, col)][0]
+
+        print(self.possible_pieces)
 
 
     def action_piece(self, row, col):
