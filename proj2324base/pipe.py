@@ -110,7 +110,7 @@ class Board:
                         self.matrix[r][c] = self.possible_pieces[(r, c)][0]
 
                 else:
-                    self.incompatible_pieces.append((r, c))
+                    self.incompatible_pieces.insert(0, (r, c))
 
         return self
  
