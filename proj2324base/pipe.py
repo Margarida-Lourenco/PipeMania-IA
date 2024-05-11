@@ -152,12 +152,16 @@ class Board:
         matrix2 = self.matrix.copy()
         matrix2[row][col] = piece
 
-        if len(self.possible_pieces[(row, col)]) == 1:
+        if len(self.possible_pieces[(row, col)]) == 1 and (row, col) in self.incompatible_pieces:
             self.incompatible_pieces.remove((row, col))
+        else:
+            self.incompatible_pieces.remove((row, col))
+            self.incompatible_pieces.insert(0,(row, col))
 
         # Criar uma nova instância de Board com a matriz atualizada
         new_board = Board(matrix2)
 
+        # Atualiza as possibilidades e peças incompatíveis na nova instância
         new_board.possible_pieces = self.possible_pieces.copy()
         new_board.incompatible_pieces = self.incompatible_pieces.copy()
 
@@ -184,10 +188,7 @@ class Board:
                 if len(self.possible_pieces[self.determine_neighbor_position(row, col, i)]) == 1:
                     filtered_neighbors.append((self.possible_pieces[self.determine_neighbor_position(row, col, i)][0], i))
 
-        
-        print(filtered_neighbors)
         for piece in self.possible_pieces[(row, col)]:
-            print(piece)
             is_compatible = True
             for neighbor_piece, index in filtered_neighbors:
                 neighbor_connections = pecasT[neighbor_piece]
@@ -234,8 +235,7 @@ class PipeMania(Problem):
         return state.board.get_incompatible_pieces_count() == 0
     
     def h(self, node):
-        node.state.board
-        return node.state.board.get_incompatible_pieces_count()
+        pass
 
 if __name__ == "__main__":
     # TODO:
