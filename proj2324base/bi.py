@@ -1,10 +1,15 @@
-# File: bimaru.py
-# Description: Python program that solves the bimaru game.
-# Group 10:
-#   103124 Gonçalo Bárias
-#   102624 Raquel Braunschweig
+# pipe.py: Template para implementação do projeto de Inteligência Artificial 2023/2024.
+# Devem alterar as classes e funções neste ficheiro de acordo com as instruções do enunciado.
+# Além das funções e classes sugeridas, podem acrescentar outras que considerem pertinentes.
 
-from sys import stdin
+# Grupo 24:
+# 107137 Margarida Lourenço
+# 107028 Inês Paredes
+
+import sys
+import numpy as np
+import time
+
 from search import (
     Problem,
     Node,
@@ -15,484 +20,226 @@ from search import (
     recursive_best_first_search,
 )
 
-rows_fixed_num, cols_fixed_num = (), ()
-boat_piece_vals = ("t", "b", "l", "r", "c", "m", "x")
-water_vals = ("w", ".")
-incomp_vals = ("?", "x")
-orientation_vecs = {
-    "t": (1, 0, "b"),
-    "b": (-1, 0, "t"),
-    "l": (0, 1, "r"),
-    "r": (0, -1, "l"),
-    "c": (0, 0, "c"),
-}
+pecasT = {'FC': (0, 1, 0, 0), 'FB': (0, 0, 0, 1), 'FD': (0, 0, 1, 0), 'FE': (1, 0, 0, 0),
+            'BC': (1, 1, 1, 0), 'BB': (1, 0, 1, 1), 'BD': (0, 1, 1, 1), 'BE': (1, 1, 0, 1),
+            'VC': (1, 1, 0, 0), 'VB': (0, 0, 1, 1), 'VD': (0, 1, 1, 0), 'VE': (1, 0, 0, 1),
+            'LH': (1, 0, 1, 0), 'LV': (0, 1, 0, 1)}
 
+pecasF = {'FE': (1, 0, 0, 0), 'FC': (0, 1, 0, 0), 'FD': (0, 0, 1, 0), 'FB': (0, 0, 0, 1)}
+pecasB = {'BE': (1, 1, 0, 1), 'BC': (1, 1, 1, 0), 'BD': (0, 1, 1, 1), 'BB': (1, 0, 1, 1)}
+pecasV = {'VE': (1, 0, 0, 1), 'VC': (1, 1, 0, 0), 'VD': (0, 1, 1, 0), 'VB': (0, 0, 1, 1)}
+pecasL = {'LH': (1, 0, 1, 0), 'LV': (0, 1, 0, 1)}
+
+class PipeManiaState:
+    state_id = 0
+
+    def __init__(self, board):
+        self.board = board
+        self.id = PipeManiaState.state_id
+        PipeManiaState.state_id += 1
+
+    def __lt__(self, other):
+        return self.id < other.id
 
 class Board:
-    """Internal representation of a Bimaru board."""
+    """Representação interna de um tabuleiro de PipeMania."""
+    
+    def __init__(self, matrix):
+        self.matrix = np.array(matrix)
+        self.rows, self.cols = self.matrix.shape
 
-    def __init__(self, cells):
-        """The board consists of cells with initial constraints."""
-        self.cells = cells
-        self.size = len(cells)
-        self.is_invalid = False
+    def print_matrix(self):
+        for row in self.matrix:
+            print("\t".join(str(item) for item in row))
 
-    def get_value(self, row: int, col: int):
-        """Returns the value in the respective board position."""
-        if 0 <= row < self.size and 0 <= col < self.size:
-            return self.cells[row][col].lower()
+    def get_value(self, row: int, col: int) -> tuple:
+        """Devolve a peça na respetiva posição do tabuleiro."""
+        if 0 <= row < self.rows and 0 <= col < self.cols:
+            return self.matrix[row][col]
+        return None
 
-    def set_value(self, row: int, col: int, val: str, override=False):
-        """Sets the value in the respective board position.
-        If the override flag is active, it replaces the value at that position
-        and doesn't count that piece."""
-        if row < 0 or row >= self.size or col < 0 or col >= self.size:
-            return
-        if (not override and self.get_value(row, col) == "?") or override:
-            self.cells[row][col] = val
-            if val == "x":
-                self.isolate_boat_piece(row, col, "x")
-            if not override and val.lower() in water_vals:
-                self.rows_water_num[row] += 1
-                self.cols_water_num[col] += 1
-                if self.size - self.rows_water_num[row] < rows_fixed_num[row]:
-                    self.is_invalid = True
-                if self.size - self.cols_water_num[col] < cols_fixed_num[col]:
-                    self.is_invalid = True
-            elif not override and val.lower() in boat_piece_vals:
-                self.rows_boat_pieces_num[row] += 1
-                self.cols_boat_pieces_num[col] += 1
-                if self.rows_boat_pieces_num[row] > rows_fixed_num[row]:
-                    self.is_invalid = True
-                if self.cols_boat_pieces_num[col] > cols_fixed_num[col]:
-                    self.is_invalid = True
-
-    def get_adjacent_touching_values(self, row: int, col: int):
-        return (
-            self.get_value(row - 1, col),
-            self.get_value(row, col + 1),
-            self.get_value(row + 1, col),
-            self.get_value(row, col - 1),
-        )
-
-    def set_adjacent_touching_values(
-        self, row: int, col: int, t: str, r: str, b: str, l: str
-    ):
-        self.set_value(row - 1, col, t)
-        self.set_value(row, col + 1, r)
-        self.set_value(row + 1, col, b)
-        self.set_value(row, col - 1, l)
-
-    def get_adjacent_diagonal_values(self, row: int, col: int):
-        """Returns the values in the two diagonals of the selected position,
-        starting from the top left diagonal positon and going
-        around clockwise."""
-        return (
-            self.get_value(row - 1, col - 1),
-            self.get_value(row - 1, col + 1),
-            self.get_value(row + 1, col + 1),
-            self.get_value(row + 1, col - 1),
-        )
-
-    def set_adjacent_diagonal_values(
-        self, row: int, col: int, tl: str, tr: str, bl: str, br: str
-    ):
-        self.set_value(row - 1, col - 1, tl)
-        self.set_value(row - 1, col + 1, tr)
-        self.set_value(row + 1, col + 1, br)
-        self.set_value(row + 1, col - 1, bl)
+    def get_neighbors(self, row, col):
+        """Retorna uma lista de tuplas contendo os valores dos vizinhos e seus índices de direção."""
+        neighbors = [
+            (self.get_value(row, col-1), 0),  # Esquerda
+            (self.get_value(row-1, col), 1),  # Cima
+            (self.get_value(row, col+1), 2),  # Direita
+            (self.get_value(row+1, col), 3)   # Baixo
+        ]
+        return neighbors
+    
+    def determine_neighbor_position(self, row, col, index):
+        """Determina a posição do vizinho com base no índice."""
+        if index == 0:  # Esquerda
+            return row, col-1 if col-1 >= 0 else None
+        elif index == 1:  # Cima
+            return row-1, col if row-1 >= 0 else None
+        elif index == 2:  # Direita
+            return row, col+1 if col+1 < self.cols else None
+        elif index == 3:  # Baixo
+            return row+1, col if row+1 < self.rows else None
 
     @staticmethod
     def parse_instance():
-        global rows_fixed_num, cols_fixed_num
-        """Reads the test from the standard input (stdin) that is passed as an
-        argument and returns an instance of the Board class.
+        """Lê o texto do standard input (stdin) e retorna uma instância da classe Board."""
+        input_lines = sys.stdin.read().splitlines()
+        matrix = [line.split() for line in input_lines if line.strip()]
+        return Board(matrix).calculate_state()
 
-        Input format:
-            ROW <count-0> ... <count-9>
-            COLUMN <count-0> ... <count-9>
-            <hint total>
-            HINT <row> <column> <hint value>
-        """
-        rows_info = stdin.readline().strip("\n")
-        cols_info = stdin.readline().strip("\n")
-        rows_fixed_num = tuple(map(int, rows_info.split("\t")[1:]))
-        cols_fixed_num = tuple(map(int, cols_info.split("\t")[1:]))
-        board_size = len(rows_fixed_num)
+    def calculate_state(self):
+        """Calcula os valores do estado interno, para ser usado no tabuleiro inicial."""
+        self.incompatible_pieces = [] 
+        self.possible_pieces = {(r, c): [] for r in range(self.rows) for c in range(self.cols)}
 
-        cells = [["?" for _ in range(board_size)] for _ in range(board_size)]
-        brd = Board(cells)
-        brd.boats_num = [0, 4, 3, 2, 1]
-        brd.rows_boat_pieces_num = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        brd.rows_water_num = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        brd.cols_boat_pieces_num = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        brd.cols_water_num = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        for r in range(self.rows):
+            for c in range(self.cols):
+                neighbors = self.get_neighbors(r, c) 
+                piece = self.get_value(r, c)
+        
+                none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
 
-        hint_total = int(input())
-        for _ in range(hint_total):
-            hint = stdin.readline().strip("\n").split("\t")[1:]
-            hint_row, hint_col = int(hint[0]), int(hint[1])
-            # Inserts the hint into the board
-            brd.set_value(hint_row, hint_col, hint[2])
+                if len(none_neighbors) != 0:
+                    pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
+                    for piece_name, orientation in pecas.items():
+                        is_compatible = True
 
-        # Isolates starting pieces and checks for initial completed boats
-        for row in range(brd.size):
-            for col in range(brd.size):
-                if brd.get_value(row, col) in boat_piece_vals:
-                    brd.isolate_boat_piece(row, col, brd.get_value(row, col))
-                if brd.get_value(row, col) in ("t", "l", "c"):
-                    brd.check_boat_completion(row, col)
+                        for _, index in none_neighbors:
+                            if orientation[index] == 1:
+                                is_compatible = False
 
-        return brd.reduce_board()
+                        if is_compatible:
+                            self.possible_pieces[(r, c)].append(piece_name)
 
-    def reduce_board(self):
-        """Infers from the current board the pieces that can be placed by
-        scanning the board and the counters. When a row/column is already full,
-        it fills the rest with water. Also tries to find the 'x' boat pieces."""
-        cont = True
-        while cont:
-            cont = False
-            for diag in range(self.size):
-                if (
-                    self.size - self.rows_water_num[diag] == rows_fixed_num[diag]
-                    and self.rows_boat_pieces_num[diag] != rows_fixed_num[diag]
-                ):
-                    cont = True
-                    for col in range(self.size):
-                        self.set_value(diag, col, "x")
-                elif (
-                    self.rows_boat_pieces_num[diag] == rows_fixed_num[diag]
-                    and self.size - self.rows_water_num[diag] != rows_fixed_num[diag]
-                ):
-                    cont = True
-                    for col in range(self.size):
-                        self.set_value(diag, col, ".")
-                if (
-                    self.size - self.cols_water_num[diag] == cols_fixed_num[diag]
-                    and self.cols_boat_pieces_num[diag] != cols_fixed_num[diag]
-                ):
-                    cont = True
-                    for row in range(self.size):
-                        self.set_value(row, diag, "x")
-                elif (
-                    self.cols_boat_pieces_num[diag] == cols_fixed_num[diag]
-                    and self.size - self.cols_water_num[diag] != cols_fixed_num[diag]
-                ):
-                    cont = True
-                    for row in range(self.size):
-                        self.set_value(row, diag, ".")
-        for row in range(self.size):
-            for col in range(self.size):
-                if self.get_value(row, col) == "x":
-                    self.find_boat_piece(row, col)
+                    if len(self.possible_pieces[(r, c)]) > 1:
+                        self.incompatible_pieces.append((r, c))
+                    else:
+                        self.matrix[r][c] = self.possible_pieces[(r, c)][0]
 
+                else:
+                    self.incompatible_pieces.append((r, c))
+        
         return self
+ 
+    def set_piece(self, row: int, col: int, piece: tuple):
+        """Coloca uma peça no tabuleiro."""
+        matrix2 = self.matrix.copy()
+        matrix2[row][col] = piece
 
-    def check_boat_piece_isolation(self, row: int, col: int, boat_type: str):
-        """Given a certain boat type, it checks if the surrounding diagonal
-        and touching adjacent positions obey the game rules."""
-        if any(
-            val in boat_piece_vals
-            for val in self.get_adjacent_diagonal_values(row, col)
-        ):
-            return False
+        if len(self.possible_pieces[(row, col)]) == 1 and (row, col) in self.incompatible_pieces:
+            self.incompatible_pieces.remove((row, col))
+        else:
+            self.incompatible_pieces.remove((row, col))
+            self.incompatible_pieces.insert(0,(row, col))
 
-        touching_adjacents = self.get_adjacent_touching_values(row, col)
-        if boat_type in ("t", "r", "b", "l"):
-            d_row, d_col, o_extreme = orientation_vecs[boat_type]
-            o_val = self.get_value(row + d_row, col + d_col)
-            if o_val not in ("?", "x", "m", o_extreme):
-                return False
-            if self.get_value(row - d_row, col - d_col) in boat_piece_vals:
-                return False
-            if self.get_value(row + d_col, col + d_row) in boat_piece_vals:
-                return False
-            if self.get_value(row - d_col, col - d_row) in boat_piece_vals:
-                return False
-        elif boat_type == "c":
-            if any(val in boat_piece_vals for val in touching_adjacents):
-                return False
-        elif boat_type == "m":
-            if sum(val in water_vals for val in touching_adjacents) >= 3:
-                return False
-            for i in range(3):
-                if (
-                    touching_adjacents[i] in water_vals
-                    and touching_adjacents[i + 1] in water_vals
-                ) or (
-                    touching_adjacents[i] in boat_piece_vals
-                    and touching_adjacents[i + 1] in boat_piece_vals
-                ):
-                    return False
-        elif boat_type == "x":
-            for i in range(3):
-                if (
-                    touching_adjacents[i] in boat_piece_vals
-                    and touching_adjacents[i + 1] in boat_piece_vals
-                ):
-                    return False
+        # Criar uma nova instância de Board com a matriz atualizada
+        new_board = Board(matrix2)
 
-        return True
+        # Atualiza as possibilidades e peças incompatíveis na nova instância
+        new_board.possible_pieces = self.possible_pieces.copy()
+        new_board.incompatible_pieces = self.incompatible_pieces.copy()
 
-    def check_boat_completion(self, row: int, col: int):
-        """Given an extreme piece of a boat, it checks if it is part of a
-        complete boat by finding the other extreme piece. If it discovers a
-        boat it updates the counter with the number of boats available."""
-        val = self.get_value(row, col)
-        if val == "c":
-            self.boats_num[1] -= 1  # it's a submarine that has size 1
-            return
+        return new_board
+        
+    def get_incompatible_pieces_count(self):
+        """Devolve o número de peças incompatíveis."""
+        return len(self.incompatible_pieces)
+    
+    def get_next_incompatible_piece(self):
+        """Devolve a próxima peça incompatível."""
+        return self.incompatible_pieces[-1]
+    
+    def get_possible_pieces(self, row, col):
+        """Devolve todas as possíveis peças que podem ser colocadas na posição (row, col)."""
+        return self.possible_pieces[(row, col)]
 
-        if val == "m" and self.get_value(row - 1, col) in boat_piece_vals:
-            d_row, d_col = -1, 0
-        elif val == "m" and self.get_value(row, col - 1) in boat_piece_vals:
-            d_row, d_col = 0, -1
-        elif val == "m":
-            return
-        while val == "m":
-            row += d_row
-            col += d_col
-            val = self.get_value(row, col)
-        if val in incomp_vals or val in water_vals:
-            return  # if it's not a boat piece we return
+    def action_piece(self, row, col):
+        """Determina ações possíveis para a peça na posição (row, col)."""
+        filtered_neighbors = []
+        piece = self.get_value(row, col)
+        pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
 
-        d_row, d_col, o_extreme = orientation_vecs[val]
-        size = 2  # every other boat has two extremes besides the submarine
-        while self.get_value(row + d_row, col + d_col) == "m":
-            row += d_row
-            col += d_col
-            size += 1
-        if size > 4:
-            self.is_invalid = True
-            return
-        if self.get_value(row + d_row, col + d_col) == o_extreme:
-            self.boats_num[size] -= 1
+        for i in range(4):
+            if None not in self.determine_neighbor_position(row, col, i):
+                if len(self.possible_pieces[self.determine_neighbor_position(row, col, i)]) == 1:
+                    filtered_neighbors.append((self.possible_pieces[self.determine_neighbor_position(row, col, i)][0], i))
 
-    def isolate_boat_piece(self, row: int, col: int, boat_type: str):
-        """Depending on the boat type, it isolates them according to the game
-        rules. Also checks if a boat piece is not isolated, making the
-        board invalid."""
-        if not self.check_boat_piece_isolation(row, col, boat_type):
-            self.is_invalid = True
-            return
+        if len(self.possible_pieces[(row, col)]) != 0:
+            for piece in self.possible_pieces[(row, col)]:
+                is_compatible = True
+                for neighbor_piece, index in filtered_neighbors:
+                    neighbor_connections = pecasT[neighbor_piece]
+                    opposite_index = (index + 2) % 4
+                    if pecasT[piece][index] != neighbor_connections[opposite_index]:
+                        is_compatible = False
+                        break
 
-        self.set_adjacent_diagonal_values(row, col, ".", ".", ".", ".")
-        if boat_type in ("t", "r", "b", "l"):
-            d_row, d_col, _ = orientation_vecs[boat_type]
-            self.set_value(row + d_row, col + d_col, "x")
-            self.set_adjacent_touching_values(row, col, ".", ".", ".", ".")
-        elif boat_type == "c":
-            self.set_adjacent_touching_values(row, col, ".", ".", ".", ".")
-        elif boat_type == "m":
-            touching_adjacents = self.get_adjacent_touching_values(row, col)
-            if touching_adjacents.count("?") == 4:
-                return
-            for i, touching_adjacent in enumerate(touching_adjacents):
-                if touching_adjacent != "?":
-                    break
-            if (touching_adjacent in boat_piece_vals and (i == 0 or i == 2)) or (
-                touching_adjacent in water_vals and (i == 1 or i == 3)
-            ):
-                self.set_adjacent_touching_values(row, col, "x", ".", "x", ".")
-            elif (touching_adjacent in boat_piece_vals and (i == 1 or i == 3)) or (
-                touching_adjacent in water_vals and (i == 0 or i == 2)
-            ):
-                self.set_adjacent_touching_values(row, col, ".", "x", ".", "x")
+                if not is_compatible:
+                    self.possible_pieces[(row, col)].remove(piece)
+        else:
+            for piece_name, orientation in pecas.items():
+                is_compatible = True
+                for neighbor_piece, index in filtered_neighbors:
+                    neighbor_connections = pecasT[neighbor_piece]
+                    opposite_index = (index + 2) % 4
+                    if orientation[index] != neighbor_connections[opposite_index]:
+                        is_compatible = False
+                        break
 
-    def find_boat_piece(self, row: int, col: int):
-        """Checks if it can infer the boat piece type. If so, it finds
-        what the 'x' piece represents."""
-        if "?" in self.get_adjacent_touching_values(row, col):
-            return
+                if is_compatible:
+                    self.possible_pieces[(row, col)].append(piece_name)
+                
+        return self.possible_pieces[(row, col)]
+                
 
-        for boat_piece_val in boat_piece_vals:
-            if self.check_boat_piece_isolation(row, col, boat_piece_val):
-                break
-
-        self.set_value(row, col, boat_piece_val, True)
-        self.check_boat_completion(row, col)
-
-    def is_placement_valid(self, row: int, col: int, size: int, orientation: str):
-        """Checks if a placement is valid. It has to add a boat in a position
-        such that it won't touch another boat diagonally, vertically or
-        horizontally. It also has to respect the column and row constraints
-        and have compatible hints in its positions."""
-        d_row, d_col, o_extreme = orientation_vecs[orientation]
-        i_row, i_col = row, col
-        count = 0
-        for _ in range(size):
-            val = self.get_value(i_row, i_col)
-            if val != "x" and val in boat_piece_vals:
-                count += 1
-            i_row += d_row
-            i_col += d_col
-        if count == size:
-            return False
-
-        for i in range(size):
-            val = self.get_value(row, col)
-            if i == 0 and val not in ("?", "x", orientation):
-                return False
-            elif i == size - 1 and val not in ("?", "x", o_extreme):
-                return False
-            elif i != 0 and i != size - 1 and val not in ("?", "x", "m"):
-                return False
-            if i == 0 and not self.check_boat_piece_isolation(row, col, orientation):
-                return False
-            elif i == size - 1 and not self.check_boat_piece_isolation(
-                row, col, o_extreme
-            ):
-                return False
-            elif (
-                i != 0
-                and i != size - 1
-                and not self.check_boat_piece_isolation(row, col, "m")
-            ):
-                return False
-            row += d_row
-            col += d_col
-
-        return True
-
-    def get_placements_for_boat(self, size: int):
-        """Gets all the valid placements (in both orientations) for a boat of
-        a certain size."""
-        placements = ()
-        for diag in range(self.size):
-            orientation = "c"
-            if size != 1:
-                orientation = "l"
-            if rows_fixed_num[diag] >= size:
-                for col in range(self.size - size + 1):
-                    if self.is_placement_valid(diag, col, size, orientation):
-                        placements += ((diag, col, size, orientation),)
-
-            if size != 1:
-                orientation = "t"
-            if cols_fixed_num[diag] >= size:
-                for row in range(self.size - size + 1):
-                    if self.is_placement_valid(row, diag, size, orientation):
-                        placements += ((row, diag, size, orientation),)
-
-        return placements
-
-    def place_boat(self, row: int, col: int, size: int, orientation: str):
-        """Returns a new board that results from placing the given boat in the
-        valid position. In order to be valid the is_placement_valid function
-        must return True for the given placement/position."""
-        new_cells = [[val for val in self.cells[row]] for row in range(self.size)]
-        new_board = Board(new_cells)
-
-        new_board.rows_boat_pieces_num = self.rows_boat_pieces_num.copy()
-        new_board.cols_boat_pieces_num = self.cols_boat_pieces_num.copy()
-        new_board.rows_water_num = self.rows_water_num.copy()
-        new_board.cols_water_num = self.cols_water_num.copy()
-        new_board.boats_num = self.boats_num.copy()
-        new_board.boats_num[size] -= 1
-        d_row, d_col, o_extreme = orientation_vecs[orientation]
-        for i in range(size):
-            if i == 0:
-                boat_type = orientation
-            elif i == size - 1:
-                boat_type = o_extreme
-            else:
-                boat_type = "m"
-            if new_board.get_value(row, col) == "?":
-                new_board.set_value(row, col, boat_type)
-            elif new_board.get_value(row, col) == "x":
-                new_board.set_value(row, col, boat_type, True)
-            new_board.isolate_boat_piece(row, col, boat_type)
-            row += d_row
-            col += d_col
-
-        return new_board.reduce_board()
-
-    def is_board_complete(self):
-        """Checks if the board is a valid solution to the puzzle. For a
-        Bimaru puzzle to be complete it needs to have all the constraints in
-        the columns and rows satisfied and be a valid board."""
-        if any(num < 0 for num in self.boats_num):
-            self.is_invalid = True
-        if self.is_invalid or sum(self.boats_num) != 0:
-            return False
-
-        self.reduce_board()
-        return True
-
-    def __repr__(self):
-        """External representation of a Bimaru board that follows the specified
-        format."""
-        return "\n".join(map(lambda val: "".join(val), self.cells))
-
-
-class BimaruState:
-    """Represents the state used in the search algorithms."""
-
-    state_id = 0
-
+class PipeMania(Problem):
     def __init__(self, board: Board):
-        """Each state has a board and a unique identifier."""
-        self.board = board
-        self.id = BimaruState.state_id
-        BimaruState.state_id += 1
-
-    def __lt__(self, other):
-        """This method is used in case of a tie in the management of the
-        open list in the informed searches."""
-        return self.id < other.id
-
-
-class Bimaru(Problem):
-    """Implements the Problem superclass to solve the bimaru problem."""
-
-    def __init__(self, board: Board):
-        """The constructor specifies the initial state."""
-        state = BimaruState(board)
+        """O construtor especifica o estado inicial."""
+        state = PipeManiaState(board)
         super().__init__(state)
+        pass
 
-    def actions(self, state: BimaruState):
-        """Returns a list of actions that can be performed from
-        from the state passed as an argument."""
-        if state.board.is_invalid or sum(state.board.boats_num) == 0:
-            return ()
+    def actions(self, state: PipeManiaState):
+        """Retorna uma lista de ações que podem ser executadas a
+        partir do estado passado como argumento."""
+        if state.board.get_incompatible_pieces_count() == 0:
+            return []
 
-        for next_size in reversed(range(4 + 1)):
-            if next_size == 0:
-                return ()
-            if state.board.boats_num[next_size] != 0:
-                break
+        row , col = state.board.get_next_incompatible_piece()
 
-        return state.board.get_placements_for_boat(next_size)
+        possibilities = state.board.action_piece(row, col)
+        return map(lambda piece: (row, col, piece), possibilities)
 
-    def result(self, state: BimaruState, action):
-        """Returns the state obtained by executing the 'action' on the
-        'state' passed as an argument. The action to execute must be one
-        present in the list obtained by executing self.actions(state)."""
-        (row, col, size, orientation) = action
-        return BimaruState(state.board.place_boat(row, col, size, orientation))
+    def result(self, state: PipeManiaState, action):
+        """Retorna o estado resultante de executar a 'action' sobre
+        'state' passado como argumento. A ação a executar deve ser uma
+        das presentes na lista obtida pela execução de
+        self.actions(state)."""
+        (row, col, piece) = action
+        return PipeManiaState(state.board.set_piece(row, col, piece))
 
-    def goal_test(self, state: BimaruState):
-        """Returns True if and only if the state passed as an argument is
-        a goal state. It should check that all positions on the board
-        are filled according to the rules of the problem."""
-        return state.board.is_board_complete()
-
-    def h(self, node: Node):
-        """Heuristic function used for informed searches."""
-        brd, row_diff = node.state.board, 0
-        for i in range(node.state.board.size):
-            row_diff += rows_fixed_num[i] - brd.rows_boat_pieces_num[i]
-        return row_diff
-
+    def goal_test(self, state: PipeManiaState):
+        """Retorna True se e só se o estado passado como argumento é
+        um estado objetivo. Deve verificar se todas as posições do tabuleiro
+        estão preenchidas de acordo com as regras do problema."""
+        return state.board.get_incompatible_pieces_count() == 0
+    
+    def h(self, node):
+        pass
 
 if __name__ == "__main__":
-    """Read the standard input file.
-    Use a search technique to solve the instance.
-    Retrieve the solution from the resulting node.
-    Print to the standard output in the indicated format."""
-    brd = Board.parse_instance()
-    piece = brd.get_adjacent_touching_values(0, 0)
-    print(piece)
-    bimaru = Bimaru(brd)
-    goal_node = depth_first_tree_search(bimaru)
-    print(goal_node.state.board)
+    # TODO:
+    # Ler o ficheiro do standard input,
+    # Usar uma técnica de procura para resolver a instância,
+    # Retirar a solução a partir do nó resultante,
+    # Imprimir para o standard output no formato indicado.
+    board = Board.parse_instance()
+    problem = PipeMania(board)
+    start_time = time.time()
+    goal_node = depth_first_tree_search(problem)
+    end_time = time.time()
+    
+    if goal_node:
+        print("Tempo de execução:", end_time - start_time, "segundos")
+    else:
+        print("Não foi encontrada uma solução.")
+    goal_node.state.board.print_matrix()

@@ -8,6 +8,7 @@
 
 import sys
 import numpy as np
+import time
 
 from search import (
     Problem,
@@ -97,53 +98,25 @@ class Board:
         
                 none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
 
-                if (piece in pecasV and len(none_neighbors) == 2) or ((piece in pecasL or piece in pecasB) and len(none_neighbors) == 1):
-                    pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else None
+                if len(none_neighbors) != 0:
+                    pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
                     for piece_name, orientation in pecas.items():
                         is_compatible = True
+
                         for _, index in none_neighbors:
                             if orientation[index] == 1:
                                 is_compatible = False
-                                break
+
                         if is_compatible:
-                            self.matrix[r][c] = piece_name
                             self.possible_pieces[(r, c)].append(piece_name)
-                
+
+                    if len(self.possible_pieces[(r, c)]) > 1:
+                        self.incompatible_pieces.append((r, c))
+                    else:
+                        self.matrix[r][c] = self.possible_pieces[(r, c)][0]
+
                 else:
-                    pecas = pecasB if piece in pecasB else pecasV if piece in pecasV else pecasL if piece in pecasL else pecasF if piece in pecasF else None
-                    for piece_name, orientation in pecas.items():
-                        is_compatible = True
-                        for neighbor_piece, neighbor_index in neighbors:
-
-                            if neighbor_piece is None:
-                                if orientation[neighbor_index] == 1:
-                                    is_compatible = False   
-
-                            elif piece_name in pecasF and neighbor_piece in pecasF:
-                                neighbor_connections = pecasF[neighbor_piece]
-                                opposite_index = (neighbor_index + 2) % 4
-
-                                if orientation[neighbor_index] == neighbor_connections[opposite_index] == 1:      
-                                    is_compatible = False
-            
-                            elif neighbor_piece in self.possible_pieces[self.determine_neighbor_position(r, c, neighbor_index)]\
-                                and len(self.possible_pieces[self.determine_neighbor_position(r, c, neighbor_index)]) == 1:
-                                neighbor_connections = pecasT[neighbor_piece]
-                                opposite_index = (neighbor_index + 2) % 4
-                                if (piece_name in pecasF and neighbor_piece in pecasF) and orientation[neighbor_index] == 1:
-                                    is_compatible = False
-
-                                elif orientation[neighbor_index] != neighbor_connections[opposite_index]:
-                                    is_compatible = False
-
-                        if is_compatible:
-                            self.possible_pieces[(r, c)].append(piece_name)
-
-                
-                if len(self.possible_pieces[(r, c)]) > 1 or len(self.possible_pieces[(r, c)]) == 0:
                     self.incompatible_pieces.append((r, c))
-                else:
-                    self.matrix[r][c] = self.possible_pieces[(r, c)][0]
         
         return self
  
@@ -182,25 +155,41 @@ class Board:
     def action_piece(self, row, col):
         """Determina ações possíveis para a peça na posição (row, col)."""
         filtered_neighbors = []
+        piece = self.get_value(row, col)
+        pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
 
         for i in range(4):
             if None not in self.determine_neighbor_position(row, col, i):
                 if len(self.possible_pieces[self.determine_neighbor_position(row, col, i)]) == 1:
                     filtered_neighbors.append((self.possible_pieces[self.determine_neighbor_position(row, col, i)][0], i))
 
-        for piece in self.possible_pieces[(row, col)]:
-            is_compatible = True
-            for neighbor_piece, index in filtered_neighbors:
-                neighbor_connections = pecasT[neighbor_piece]
-                opposite_index = (index + 2) % 4
-                if pecasT[piece][index] != neighbor_connections[opposite_index]:
-                    is_compatible = False
-                    break
+        if len(self.possible_pieces[(row, col)]) != 0:
+            for piece in self.possible_pieces[(row, col)]:
+                is_compatible = True
+                for neighbor_piece, index in filtered_neighbors:
+                    neighbor_connections = pecasT[neighbor_piece]
+                    opposite_index = (index + 2) % 4
+                    if pecasT[piece][index] != neighbor_connections[opposite_index]:
+                        is_compatible = False
+                        break
 
-            if not is_compatible:
-                self.possible_pieces[(row, col)].remove(piece)
+                if not is_compatible:
+                    self.possible_pieces[(row, col)].remove(piece)
+        else:
+            for piece_name, orientation in pecas.items():
+                is_compatible = True
+                for neighbor_piece, index in filtered_neighbors:
+                    neighbor_connections = pecasT[neighbor_piece]
+                    opposite_index = (index + 2) % 4
+                    if orientation[index] != neighbor_connections[opposite_index]:
+                        is_compatible = False
+                        break
+
+                if is_compatible:
+                    self.possible_pieces[(row, col)].append(piece_name)
                 
         return self.possible_pieces[(row, col)]
+                
 
 class PipeMania(Problem):
     def __init__(self, board: Board):
@@ -245,5 +234,12 @@ if __name__ == "__main__":
     # Imprimir para o standard output no formato indicado.
     board = Board.parse_instance()
     problem = PipeMania(board)
+    start_time = time.time()
     goal_node = depth_first_tree_search(problem)
+    end_time = time.time()
+    
+    if goal_node:
+        print("Tempo de execução:", end_time - start_time, "segundos")
+    else:
+        print("Não foi encontrada uma solução.")
     goal_node.state.board.print_matrix()
