@@ -8,7 +8,6 @@
 
 import sys
 import numpy as np
-import time
 
 from search import (
     Problem,
@@ -25,10 +24,10 @@ pecasT = {'FC': (0, 1, 0, 0), 'FB': (0, 0, 0, 1), 'FD': (0, 0, 1, 0), 'FE': (1, 
             'VC': (1, 1, 0, 0), 'VB': (0, 0, 1, 1), 'VD': (0, 1, 1, 0), 'VE': (1, 0, 0, 1),
             'LH': (1, 0, 1, 0), 'LV': (0, 1, 0, 1)}
 
-pecasF = {'FE': (1, 0, 0, 0), 'FC': (0, 1, 0, 0), 'FD': (0, 0, 1, 0), 'FB': (0, 0, 0, 1)}
-pecasB = {'BE': (1, 1, 0, 1), 'BC': (1, 1, 1, 0), 'BD': (0, 1, 1, 1), 'BB': (1, 0, 1, 1)}
-pecasV = {'VE': (1, 0, 0, 1), 'VC': (1, 1, 0, 0), 'VD': (0, 1, 1, 0), 'VB': (0, 0, 1, 1)}
-pecasL = {'LH': (1, 0, 1, 0), 'LV': (0, 1, 0, 1)}
+pecasF = {'FE', 'FC', 'FD', 'FB'}
+pecasB = {'BE', 'BC', 'BD', 'BB'}
+pecasV = {'VE', 'VC', 'VD', 'VB'}
+pecasL = {'LH', 'LV'}
 
 class PipeManiaState:
     state_id = 0
@@ -47,6 +46,8 @@ class Board:
     def __init__(self, matrix):
         self.matrix = np.array(matrix)
         self.rows, self.cols = self.matrix.shape
+        self.possible_pieces = {(r, c): [] for r in range(self.rows) for c in range(self.cols)}
+        self.incompatible_pieces = []
 
     def print_matrix(self):
         for row in self.matrix:
@@ -88,25 +89,18 @@ class Board:
 
     def calculate_state(self):
         """Calcula os valores do estado interno, para ser usado no tabuleiro inicial."""
-        self.incompatible_pieces = [] 
-        self.possible_pieces = {(r, c): [] for r in range(self.rows) for c in range(self.cols)}
-
         for r in range(self.rows):
             for c in range(self.cols):
-                neighbors = self.get_neighbors(r, c) 
+                neighbors = self.get_neighbors(r, c)
                 piece = self.get_value(r, c)
-        
+
                 none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
 
                 if len(none_neighbors) != 0:
                     pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
-                    for piece_name, orientation in pecas.items():
-                        is_compatible = True
-
-                        for _, index in none_neighbors:
-                            if orientation[index] == 1:
-                                is_compatible = False
-
+                    for piece_name in pecas:
+                        orientation = pecasT[piece_name]
+                        is_compatible = all(orientation[index] != 1 for _, index in none_neighbors)
                         if is_compatible:
                             self.possible_pieces[(r, c)].append(piece_name)
 
@@ -117,13 +111,12 @@ class Board:
 
                 else:
                     self.incompatible_pieces.append((r, c))
-        
+
         return self
  
     def set_piece(self, row: int, col: int, piece: tuple):
         """Coloca uma peça no tabuleiro."""
-        matrix2 = self.matrix.copy()
-        matrix2[row][col] = piece
+        self.matrix[row][col] = piece
 
         if len(self.possible_pieces[(row, col)]) == 1 and (row, col) in self.incompatible_pieces:
             self.incompatible_pieces.remove((row, col))
@@ -131,14 +124,7 @@ class Board:
             self.incompatible_pieces.remove((row, col))
             self.incompatible_pieces.insert(0,(row, col))
 
-        # Criar uma nova instância de Board com a matriz atualizada
-        new_board = Board(matrix2)
-
-        # Atualiza as possibilidades e peças incompatíveis na nova instância
-        new_board.possible_pieces = self.possible_pieces.copy()
-        new_board.incompatible_pieces = self.incompatible_pieces.copy()
-
-        return new_board
+        return self
         
     def get_incompatible_pieces_count(self):
         """Devolve o número de peças incompatíveis."""
@@ -176,7 +162,8 @@ class Board:
                 if not is_compatible:
                     self.possible_pieces[(row, col)].remove(piece)
         else:
-            for piece_name, orientation in pecas.items():
+            for piece_name in pecas:
+                orientation = pecasT[piece_name]
                 is_compatible = True
                 for neighbor_piece, index in filtered_neighbors:
                     neighbor_connections = pecasT[neighbor_piece]
@@ -224,22 +211,16 @@ class PipeMania(Problem):
         return state.board.get_incompatible_pieces_count() == 0
     
     def h(self, node):
-        pass
+        total_pieces = node.state.board.rows * node.state.board.cols
+        correct_pieces = total_pieces - node.state.board.get_incompatible_pieces_count()
+        return correct_pieces
 
 if __name__ == "__main__":
-    # TODO:
     # Ler o ficheiro do standard input,
     # Usar uma técnica de procura para resolver a instância,
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
     board = Board.parse_instance()
     problem = PipeMania(board)
-    start_time = time.time()
-    goal_node = depth_first_tree_search(problem)
-    end_time = time.time()
-    
-    if goal_node:
-        print("Tempo de execução:", end_time - start_time, "segundos")
-    else:
-        print("Não foi encontrada uma solução.")
+    goal_node = greedy_search(problem)
     goal_node.state.board.print_matrix()
