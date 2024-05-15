@@ -195,7 +195,7 @@ class Board:
         if len(possible_pieces) == 1:
             self.incompatible_pieces.remove((row, col))
                 
-        return possible_pieces[0]                
+        return possible_pieces               
 
 class PipeMania(Problem):
     def __init__(self, board: Board):
@@ -213,7 +213,7 @@ class PipeMania(Problem):
         row , col = state.board.get_next_incompatible_piece()
 
         possibilities = state.board.action_piece(row, col)
-        return [(row, col, possibilities)]
+        return map(lambda piece: (row, col, piece), possibilities)
 
     def result(self, state: PipeManiaState, action):
         """Retorna o estado resultante de executar a 'action' sobre
@@ -241,5 +241,5 @@ if __name__ == "__main__":
     # Imprimir para o standard output no formato indicado.
     board = Board.parse_instance()
     problem = PipeMania(board)
-    goal_node = greedy_search(problem)
+    goal_node = recursive_best_first_search(problem)
     goal_node.state.board.print_matrix()
