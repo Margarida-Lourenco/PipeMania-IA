@@ -134,7 +134,7 @@ class Board:
     def action_piece(self, row, col):
         """Determina ações possíveis para a peça na posição (row, col)."""
         filtered_neighbors = []
-        possible_pieces = {(r, c): [] for r in range(self.rows) for c in range(self.cols)}
+        possible_pieces = []
         piece = self.get_value(row, col)
         neighbors = self.get_neighbors(row, col)
         pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
@@ -155,7 +155,7 @@ class Board:
                 orientation = pecasT[piece_name]
                 is_compatible = all(orientation[index] != 1 for _, index in none_neighbors)
                 if is_compatible:
-                    possible_pieces[(row, col)].append(piece_name)
+                    possible_pieces.append(piece_name)
         
         elif c_neighbors != 0 and c_none_neighbors != 0:
             for piece_name in pecas:
@@ -168,9 +168,9 @@ class Board:
                         break
                     is_compatible = is_compatible and orientation[index] == neighbor_connections[(index + 2) % 4]
                 if is_compatible:
-                    possible_pieces[(row, col)].append(piece_name)
+                    possible_pieces.append(piece_name)
         
-        else:
+        elif c_neighbors != 0 and c_none_neighbors == 0:
             for piece_name in pecas:
                 is_compatible = True
                 orientation = pecasT[piece_name]
@@ -183,13 +183,19 @@ class Board:
                         is_compatible = False
                         break
                 if is_compatible:
-                    possible_pieces[(row, col)].append(piece_name)
+                    possible_pieces.append(piece_name)
+        else:
+            i = 0
+            for piece_name in pecas:
+                i += 1
+                possible_pieces.append(piece_name)
+                if i == 2:
+                    break
             
-        if len(possible_pieces[(row, col)]) == 1:
+        if len(possible_pieces) == 1:
             self.incompatible_pieces.remove((row, col))
                 
-        return possible_pieces[(row, col)]
-                
+        return possible_pieces[0]                
 
 class PipeMania(Problem):
     def __init__(self, board: Board):
@@ -207,11 +213,7 @@ class PipeMania(Problem):
         row , col = state.board.get_next_incompatible_piece()
 
         possibilities = state.board.action_piece(row, col)
-        if possibilities:
-            piece = possibilities[0]  # Choose the first possible piece
-            return [(row, col, piece)]
-        else:
-            return []
+        return [(row, col, possibilities)]
 
     def result(self, state: PipeManiaState, action):
         """Retorna o estado resultante de executar a 'action' sobre
