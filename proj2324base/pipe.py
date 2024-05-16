@@ -8,6 +8,7 @@
 
 import sys
 import numpy as np
+import random
 
 from search import (
     Problem,
@@ -95,16 +96,12 @@ class Board:
         for r in range(self.rows):
             for c in range(self.cols):
                 if (r in [0, self.rows - 1] and c in [0, self.cols - 1]):
-                    # Corner cells
                     corners.append((r, c))
                 elif (r in [0, self.rows - 1] or c in [0, self.cols - 1]):
-                    # Edge cells
                     edges.append((r, c))
                 else:
-                    # Middle cells
                     middles.append((r, c))
         
-        # Combine all pieces into incompatible_pieces with desired ordering
         self.incompatible_pieces = corners + edges + middles
         return self
  
@@ -126,10 +123,6 @@ class Board:
     def get_next_incompatible_piece(self):
         """Devolve a próxima peça incompatível."""
         return self.incompatible_pieces[0]
-    
-    def get_possible_pieces(self, row, col):
-        """Devolve todas as possíveis peças que podem ser colocadas na posição (row, col)."""
-        return self.possible_pieces[(row, col)]
 
     def action_piece(self, row, col):
         """Determina ações possíveis para a peça na posição (row, col)."""
@@ -163,10 +156,14 @@ class Board:
                 is_compatible = all(orientation[index] != 1 for _, index in none_neighbors)
                 for neighbor_piece, index in filtered_neighbors:
                     neighbor_connections = pecasT[neighbor_piece]
-                    if piece_name in pecasF and neighbor_piece in pecasF and orientation[index] == neighbor_connections[(index + 2) % 4] == 1:
+                    if piece_name in pecasF and neighbor_piece in pecasF and orientation[index] == 1:
                         is_compatible = False
                         break
-                    is_compatible = is_compatible and orientation[index] == neighbor_connections[(index + 2) % 4]
+
+                    elif orientation[index] != neighbor_connections[(index + 2) % 4]:
+                        is_compatible = False
+                        break
+                    
                 if is_compatible:
                     possible_pieces.append(piece_name)
         
@@ -176,26 +173,42 @@ class Board:
                 orientation = pecasT[piece_name]
                 for neighbor_piece, index in filtered_neighbors:
                     neighbor_connections = pecasT[neighbor_piece]
-                    if piece_name in pecasF and neighbor_piece in pecasF and orientation[index] == neighbor_connections[(index + 2) % 4] == 1:
+                    if piece_name in pecasF and neighbor_piece in pecasF and orientation[index] == 1:
                         is_compatible = False
                         break
-                    if orientation[index] != neighbor_connections[(index + 2) % 4]:
+                    elif orientation[index] != neighbor_connections[(index + 2) % 4]:
                         is_compatible = False
                         break
+                    
                 if is_compatible:
                     possible_pieces.append(piece_name)
         else:
-            i = 0
-            for piece_name in pecas:
-                i += 1
-                possible_pieces.append(piece_name)
-                if i == 2:
-                    break
-            
+            pecas_list = list(pecas)
+            possible_pieces = random.sample(pecas_list, min(2, len(pecas_list)))
+
         if len(possible_pieces) == 1:
             self.incompatible_pieces.remove((row, col))
                 
-        return possible_pieces               
+        return possible_pieces
+
+    def connections_count(self):
+        """Conta o número de peças que não estão ligadas corretamente."""
+        count = 0
+        for row in range(self.rows):
+            for col in range(self.cols):
+                piece = self.get_value(row, col)
+                neighbors = self.get_neighbors(row, col)
+                for neighbor_piece, index in neighbors:
+                    if neighbor_piece is not None:
+                        piece_connections = pecasT[piece]
+                        neighbor_connections = pecasT[neighbor_piece]
+                        if piece_connections[index] != neighbor_connections[(index + 2) % 4]:
+                            count += 1
+                    elif neighbor_piece is None:
+                        piece_connections = pecasT[piece]
+                        if piece_connections[index] == 1:
+                            count += 1
+        return count
 
 class PipeMania(Problem):
     def __init__(self, board: Board):
@@ -235,10 +248,6 @@ class PipeMania(Problem):
         return correct_pieces
 
 if __name__ == "__main__":
-    # Ler o ficheiro do standard input,
-    # Usar uma técnica de procura para resolver a instância,
-    # Retirar a solução a partir do nó resultante,
-    # Imprimir para o standard output no formato indicado.
     board = Board.parse_instance()
     problem = PipeMania(board)
     goal_node = recursive_best_first_search(problem)
