@@ -93,16 +93,36 @@ class Board:
         for r in range(self.rows):
             for c in range(self.cols):
                 self.possible_pieces[r, c] = []
-                neighbors = self.get_neighbors(r, c)
+
+        for r in range(self.rows):
+            for c in range(self.cols):
+                none_neighbors = []
+                filtered_neighbors = []
                 piece = self.get_value(r, c)
                 pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
 
-                none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
+                for i in range(4):
+                    row, col = self.determine_neighbor_position(r, c, i)
+                    if row is not None and col is not None:
+                        if len(self.possible_pieces[row, col]) == 1:
+                            filtered_neighbors.append((self.possible_pieces[row, col][0], i))
+                    else:
+                        none_neighbors = none_neighbors + [(None, i)]
+
 
                 if len(none_neighbors) != 0:
                     for piece_name in pecas:
                         orientation = pecasT[piece_name]
                         is_compatible = all(orientation[index] != 1 for _, index in none_neighbors)
+                        for neighbor_piece, index in filtered_neighbors:
+                            neighbor_connections = pecasT[neighbor_piece]
+                            if piece_name in pecasF and neighbor_piece in pecasF and orientation[index] == 1:
+                                is_compatible = False
+                                break
+
+                            elif orientation[index] != neighbor_connections[(index + 2) % 4]:
+                                is_compatible = False
+                                break
                         if is_compatible:
                             self.possible_pieces[r, c] = self.possible_pieces[r, c] + [piece_name]
 
@@ -113,8 +133,25 @@ class Board:
 
                 else:
                     for piece_name in pecas:
-                        self.possible_pieces[r, c] = self.possible_pieces[r, c] + [piece_name]
-                    self.incompatible_pieces.append((r, c))
+                        orientation = pecasT[piece_name]
+                        is_compatible = True
+                        for neighbor_piece, index in filtered_neighbors:
+                            neighbor_connections = pecasT[neighbor_piece]
+                            if piece_name in pecasF and neighbor_piece in pecasF and orientation[index] == 1:
+                                is_compatible = False
+                                break
+
+                            elif orientation[index] != neighbor_connections[(index + 2) % 4]:
+                                is_compatible = False
+                                break
+                                
+                        if is_compatible:
+                            self.possible_pieces[r, c] = self.possible_pieces[r, c] + [piece_name]
+
+                    if len(self.possible_pieces[r, c]) > 1:
+                        self.incompatible_pieces.insert(0, (r, c))
+                    else:
+                        self.matrix[r][c] = self.possible_pieces[r, c][0]
 
         return self
 
@@ -218,7 +255,7 @@ class PipeMania(Problem):
     
     def h(self, node):
         """Função heurística utilizada no problema."""
-        pass
+        return len(node.state.board.incompatible_pieces)
 
 if __name__ == "__main__":
     board = Board.parse_instance()
