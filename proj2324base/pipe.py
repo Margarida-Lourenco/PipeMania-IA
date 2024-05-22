@@ -117,16 +117,6 @@ class Board:
                     self.incompatible_pieces.append((r, c))
 
         return self
- 
-    def set_piece(self, row: int, col: int, piece: tuple):
-        """Coloca uma peça no tabuleiro."""
-        new_board = Board(np.copy(self.matrix))
-        new_board.matrix[row][col] = piece
-
-        new_board.incompatible_pieces = self.incompatible_pieces[1:]
-        new_board.possible_pieces = np.copy(self.possible_pieces)
-
-        return new_board
 
     def action_piece(self, row, col):
         """Determina ações possíveis para a peça na posição (row, col)."""
@@ -158,37 +148,6 @@ class Board:
                     self.possible_pieces[row, col] = [piece for piece in self.possible_pieces[row, col] if piece != piece_name]
                 
         return self.possible_pieces[(row, col)]
-    
-    def is_connected(self):
-        """Verifica se todas as peças do tabuleiro formam um único componente conectado."""
-        visited = np.zeros((self.rows, self.cols), dtype=bool)
-        stack = []
-        
-        stack.append((0, 0))
-        # DFS
-        while stack:
-            row, col = stack.pop()
-            if not visited[row][col]:
-                visited[row][col] = True
-                neighbors = self.get_neighbors(row, col)
-                for neighbor_piece, index in neighbors:
-                    if neighbor_piece is not None:
-                        nr, nc = self.determine_neighbor_position(row, col, index)
-                        if not visited[nr][nc]:
-                            # Verifica se as peças são compatíveis
-                            piece_connections = pecasT[self.get_value(row, col)]
-                            neighbor_connections = pecasT[neighbor_piece]
-                            if piece_connections[index] == neighbor_connections[(index + 2) % 4] == 1:
-                                stack.append((nr, nc))
-                            elif piece_connections[index] != neighbor_connections[(index + 2) % 4]:
-                                return False
-        
-        # Verifica se todas as peças foram visitadas
-        for r in range(self.rows):
-            for c in range(self.cols):
-                if self.matrix[r][c] is not None and not visited[r][c]:
-                    return False
-        return True
 
 class PipeMania(Problem):
     def __init__(self, board: Board):
@@ -215,13 +174,47 @@ class PipeMania(Problem):
         das presentes na lista obtida pela execução de
         self.actions(state)."""
         (row, col, piece) = action
-        return PipeManiaState(state.board.set_piece(row, col, piece))
+        new_board = Board(np.copy(state.board.matrix))
+        new_board.matrix[row][col] = piece
+
+        new_board.incompatible_pieces = state.board.incompatible_pieces[1:]
+        new_board.possible_pieces = np.copy(state.board.possible_pieces)
+
+        return PipeManiaState(new_board)
 
     def goal_test(self, state: PipeManiaState):
         """Retorna True se e só se o estado passado como argumento é
         um estado objetivo. Deve verificar se todas as posições do tabuleiro
         estão preenchidas de acordo com as regras do problema."""
-        return state.board.is_connected()
+        """Verifica se todas as peças do tabuleiro formam um único componente conectado."""
+        visited = np.zeros((state.board.rows, state.board.cols), dtype=bool)
+        stack = []
+        
+        stack.append((0, 0))
+        # DFS
+        while stack:
+            row, col = stack.pop()
+            if not visited[row][col]:
+                visited[row][col] = True
+                neighbors = state.board.get_neighbors(row, col)
+                for neighbor_piece, index in neighbors:
+                    if neighbor_piece is not None:
+                        nr, nc = state.board.determine_neighbor_position(row, col, index)
+                        if not visited[nr][nc]:
+                            # Verifica se as peças são compatíveis
+                            piece_connections = pecasT[state.board.get_value(row, col)]
+                            neighbor_connections = pecasT[neighbor_piece]
+                            if piece_connections[index] == neighbor_connections[(index + 2) % 4] == 1:
+                                stack.append((nr, nc))
+                            elif piece_connections[index] != neighbor_connections[(index + 2) % 4]:
+                                return False
+        
+        # Verifica se todas as peças foram visitadas
+        for r in range(state.board.rows):
+            for c in range(state.board.cols):
+                if state.board.matrix[r][c] is not None and not visited[r][c]:
+                    return False
+        return True
     
     def h(self, node):
         """Função heurística utilizada no problema."""
