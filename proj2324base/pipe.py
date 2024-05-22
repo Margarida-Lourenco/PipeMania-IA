@@ -107,7 +107,7 @@ class Board:
                         if len(self.possible_pieces[row, col]) == 1:
                             filtered_neighbors.append((self.possible_pieces[row, col][0], i))
                     else:
-                        none_neighbors = none_neighbors + [(None, i)]
+                        none_neighbors.append((row, i))
 
 
                 if len(none_neighbors) != 0:
@@ -152,6 +152,11 @@ class Board:
                         self.incompatible_pieces.insert(0, (r, c))
                     else:
                         self.matrix[r][c] = self.possible_pieces[r, c][0]
+
+        for r in range(self.rows):
+            for c in range(self.cols):
+                if (r, c) not in self.incompatible_pieces:
+                    self.possible_pieces[r, c] = []
 
         return self
 
