@@ -127,22 +127,14 @@ class Board:
         new_board.possible_pieces = np.copy(self.possible_pieces)
 
         return new_board
-        
-    def get_incompatible_pieces_count(self):
-        """Devolve o número de peças incompatíveis."""
-        return len(self.incompatible_pieces)
-    
-    def get_next_incompatible_piece(self):
-        """Devolve a próxima peça incompatível."""
-        return self.incompatible_pieces[0]
 
     def action_piece(self, row, col):
         """Determina ações possíveis para a peça na posição (row, col)."""
         filtered_neighbors = []
 
         for i in range(4):
-            if None not in self.determine_neighbor_position(row, col, i):
-                r, c = self.determine_neighbor_position(row, col, i)
+            r, c = self.determine_neighbor_position(row, col, i)
+            if r is not None and c is not None:
                 if (r, c) not in self.incompatible_pieces:
                     filtered_neighbors.append((self.get_value(r, c), i))
 
@@ -166,25 +158,6 @@ class Board:
                     self.possible_pieces[row, col] = [piece for piece in self.possible_pieces[row, col] if piece != piece_name]
                 
         return self.possible_pieces[(row, col)]
-    
-    def connections_count(self):
-        """Conta o número de peças que não estão ligadas corretamente."""
-        count = 0
-        for row in range(self.rows):
-            for col in range(self.cols):
-                piece = self.get_value(row, col)
-                neighbors = self.get_neighbors(row, col)
-                for neighbor_piece, index in neighbors:
-                    if neighbor_piece is not None:
-                        piece_connections = pecasT[piece]
-                        neighbor_connections = pecasT[neighbor_piece]
-                        if piece_connections[index] != neighbor_connections[(index + 2) % 4]:
-                            count += 1
-                    elif neighbor_piece is None:
-                        piece_connections = pecasT[piece]
-                        if piece_connections[index] == 1:
-                            count += 1
-        return count
     
     def is_connected(self):
         """Verifica se todas as peças do tabuleiro formam um único componente conectado."""
@@ -227,10 +200,11 @@ class PipeMania(Problem):
     def actions(self, state: PipeManiaState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
-        if state.board.get_incompatible_pieces_count() == 0:
+        lista = state.board.incompatible_pieces
+        if len(lista) == 0:
             return []
         
-        row , col = state.board.get_next_incompatible_piece()
+        row , col = lista[0]
 
         possibilities = state.board.action_piece(row, col)
         return map(lambda piece: (row, col, piece), possibilities)
@@ -251,10 +225,10 @@ class PipeMania(Problem):
     
     def h(self, node):
         """Função heurística utilizada no problema."""
-        return node.state.board.connections_count() / 2
+        pass
 
 if __name__ == "__main__":
     board = Board.parse_instance()
     problem = PipeMania(board)
-    goal_node = breadth_first_tree_search(problem)
+    goal_node = depth_first_tree_search(problem)
     goal_node.state.board.print_matrix()
