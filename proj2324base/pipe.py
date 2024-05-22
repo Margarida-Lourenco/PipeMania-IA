@@ -8,7 +8,6 @@
 
 import sys
 import numpy as np
-import random
 
 from search import (
     Problem,
@@ -47,7 +46,6 @@ class Board:
     def __init__(self, matrix):
         self.matrix = np.array(matrix)
         self.rows, self.cols = self.matrix.shape
-        self.incompatible_pieces = []
 
     def print_matrix(self):
         for row in self.matrix:
@@ -89,32 +87,46 @@ class Board:
 
     def calculate_state(self):
         """Calcula os valores do estado interno, para ser usado no tabuleiro inicial."""
-        corners = []
-        edges = []
-        middles = []
+        self.incompatible_pieces = []
+        self.possible_pieces = np.empty((self.rows, self.cols), dtype=object)
 
         for r in range(self.rows):
             for c in range(self.cols):
-                if (r in [0, self.rows - 1] and c in [0, self.cols - 1]):
-                    corners.append((r, c))
-                elif (r in [0, self.rows - 1] or c in [0, self.cols - 1]):
-                    edges.append((r, c))
+                self.possible_pieces[r, c] = []
+                neighbors = self.get_neighbors(r, c)
+                piece = self.get_value(r, c)
+                pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
+
+                none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
+
+                if len(none_neighbors) != 0:
+                    for piece_name in pecas:
+                        orientation = pecasT[piece_name]
+                        is_compatible = all(orientation[index] != 1 for _, index in none_neighbors)
+                        if is_compatible:
+                            self.possible_pieces[r, c] = self.possible_pieces[r, c] + [piece_name]
+
+                    if len(self.possible_pieces[r, c]) > 1:
+                        self.incompatible_pieces.insert(0, (r, c))
+                    else:
+                        self.matrix[r][c] = self.possible_pieces[r, c][0]
+
                 else:
-                    middles.append((r, c))
-        
-        self.incompatible_pieces = corners + edges + middles
+                    for piece_name in pecas:
+                        self.possible_pieces[r, c] = self.possible_pieces[r, c] + [piece_name]
+                    self.incompatible_pieces.append((r, c))
+
         return self
  
     def set_piece(self, row: int, col: int, piece: tuple):
         """Coloca uma peça no tabuleiro."""
-        self.matrix[row][col] = piece
+        new_board = Board(np.copy(self.matrix))
+        new_board.matrix[row][col] = piece
 
-        # Atualiza a lista de peças incompatíveis
-        if (row, col) in self.incompatible_pieces:
-            self.incompatible_pieces.remove((row, col))
-            self.incompatible_pieces.append((row, col))
+        new_board.incompatible_pieces = self.incompatible_pieces[1:]
+        new_board.possible_pieces = np.copy(self.possible_pieces)
 
-        return self
+        return new_board
         
     def get_incompatible_pieces_count(self):
         """Devolve o número de peças incompatíveis."""
@@ -127,12 +139,6 @@ class Board:
     def action_piece(self, row, col):
         """Determina ações possíveis para a peça na posição (row, col)."""
         filtered_neighbors = []
-        possible_pieces = []
-        piece = self.get_value(row, col)
-        neighbors = self.get_neighbors(row, col)
-        pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
-
-        none_neighbors = [(neighbor_piece, index) for neighbor_piece, index in neighbors if neighbor_piece is None]
 
         for i in range(4):
             if None not in self.determine_neighbor_position(row, col, i):
@@ -141,56 +147,26 @@ class Board:
                     filtered_neighbors.append((self.get_value(r, c), i))
 
         c_neighbors = len(filtered_neighbors)
-        c_none_neighbors = len(none_neighbors)
 
-        if c_neighbors == 0 and c_none_neighbors != 0:
-            for piece_name in pecas:
+        if c_neighbors != 0:
+            for piece_name in self.possible_pieces[row, col]:
                 orientation = pecasT[piece_name]
-                is_compatible = all(orientation[index] != 1 for _, index in none_neighbors)
-                if is_compatible:
-                    possible_pieces.append(piece_name)
-        
-        elif c_neighbors != 0 and c_none_neighbors != 0:
-            for piece_name in pecas:
-                orientation = pecasT[piece_name]
-                is_compatible = all(orientation[index] != 1 for _, index in none_neighbors)
-                for neighbor_piece, index in filtered_neighbors:
-                    neighbor_connections = pecasT[neighbor_piece]
-                    if piece_name in pecasF and neighbor_piece in pecasF and orientation[index] == 1:
-                        is_compatible = False
-                        break
-
-                    elif orientation[index] != neighbor_connections[(index + 2) % 4]:
-                        is_compatible = False
-                        break
-                    
-                if is_compatible:
-                    possible_pieces.append(piece_name)
-        
-        elif c_neighbors != 0 and c_none_neighbors == 0:
-            for piece_name in pecas:
                 is_compatible = True
-                orientation = pecasT[piece_name]
                 for neighbor_piece, index in filtered_neighbors:
                     neighbor_connections = pecasT[neighbor_piece]
                     if piece_name in pecasF and neighbor_piece in pecasF and orientation[index] == 1:
                         is_compatible = False
                         break
+
                     elif orientation[index] != neighbor_connections[(index + 2) % 4]:
                         is_compatible = False
                         break
                     
-                if is_compatible:
-                    possible_pieces.append(piece_name)
-        else:
-            pecas_list = list(pecas)
-            possible_pieces = random.sample(pecas_list, min(2, len(pecas_list)))
-
-        if len(possible_pieces) == 1:
-            self.incompatible_pieces.remove((row, col))
+                if not is_compatible:
+                    self.possible_pieces[row, col] = [piece for piece in self.possible_pieces[row, col] if piece != piece_name]
                 
-        return possible_pieces
-
+        return self.possible_pieces[(row, col)]
+    
     def connections_count(self):
         """Conta o número de peças que não estão ligadas corretamente."""
         count = 0
@@ -209,6 +185,37 @@ class Board:
                         if piece_connections[index] == 1:
                             count += 1
         return count
+    
+    def is_connected(self):
+        """Verifica se todas as peças do tabuleiro formam um único componente conectado."""
+        visited = np.zeros((self.rows, self.cols), dtype=bool)
+        stack = []
+        
+        stack.append((0, 0))
+        # DFS
+        while stack:
+            row, col = stack.pop()
+            if not visited[row][col]:
+                visited[row][col] = True
+                neighbors = self.get_neighbors(row, col)
+                for neighbor_piece, index in neighbors:
+                    if neighbor_piece is not None:
+                        nr, nc = self.determine_neighbor_position(row, col, index)
+                        if not visited[nr][nc]:
+                            # Verifica se as peças são compatíveis
+                            piece_connections = pecasT[self.get_value(row, col)]
+                            neighbor_connections = pecasT[neighbor_piece]
+                            if piece_connections[index] == neighbor_connections[(index + 2) % 4] == 1:
+                                stack.append((nr, nc))
+                            elif piece_connections[index] != neighbor_connections[(index + 2) % 4]:
+                                return False
+        
+        # Verifica se todas as peças foram visitadas
+        for r in range(self.rows):
+            for c in range(self.cols):
+                if self.matrix[r][c] is not None and not visited[r][c]:
+                    return False
+        return True
 
 class PipeMania(Problem):
     def __init__(self, board: Board):
@@ -222,7 +229,7 @@ class PipeMania(Problem):
         partir do estado passado como argumento."""
         if state.board.get_incompatible_pieces_count() == 0:
             return []
-
+        
         row , col = state.board.get_next_incompatible_piece()
 
         possibilities = state.board.action_piece(row, col)
@@ -240,15 +247,14 @@ class PipeMania(Problem):
         """Retorna True se e só se o estado passado como argumento é
         um estado objetivo. Deve verificar se todas as posições do tabuleiro
         estão preenchidas de acordo com as regras do problema."""
-        return state.board.get_incompatible_pieces_count() == 0
+        return state.board.is_connected()
     
     def h(self, node):
-        total_pieces = node.state.board.rows * node.state.board.cols
-        correct_pieces = total_pieces - node.state.board.get_incompatible_pieces_count()
-        return correct_pieces
+        """Função heurística utilizada no problema."""
+        return node.state.board.connections_count() / 2
 
 if __name__ == "__main__":
     board = Board.parse_instance()
     problem = PipeMania(board)
-    goal_node = recursive_best_first_search(problem)
+    goal_node = breadth_first_tree_search(problem)
     goal_node.state.board.print_matrix()
