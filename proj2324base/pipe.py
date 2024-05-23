@@ -8,6 +8,7 @@
 
 import sys
 import numpy as np
+import tracemalloc
 
 from search import (
     Problem,
@@ -19,6 +20,9 @@ from search import (
     recursive_best_first_search,
 )
 
+tracemalloc.start()
+
+# Dicionário com as conexões de cada peça (Esquerda, Cima, Direita, Baixo)
 pecasT = {'FC': (0, 1, 0, 0), 'FB': (0, 0, 0, 1), 'FD': (0, 0, 1, 0), 'FE': (1, 0, 0, 0),
             'BC': (1, 1, 1, 0), 'BB': (1, 0, 1, 1), 'BD': (0, 1, 1, 1), 'BE': (1, 1, 0, 1),
             'VC': (1, 1, 0, 0), 'VB': (0, 0, 1, 1), 'VD': (0, 1, 1, 0), 'VE': (1, 0, 0, 1),
@@ -87,8 +91,8 @@ class Board:
 
     def calculate_state(self):
         """Calcula os valores do estado interno, para ser usado no tabuleiro inicial."""
-        self.incompatible_pieces = []
-        self.possible_pieces = np.empty((self.rows, self.cols), dtype=object)
+        self.incompatible_pieces = [] # Lista de peças que não estão na sua posição correta
+        self.possible_pieces = np.empty((self.rows, self.cols), dtype=object) # Possíveis peças para cada posição
 
         for r in range(self.rows):
             for c in range(self.cols):
@@ -96,8 +100,8 @@ class Board:
 
         for r in range(self.rows):
             for c in range(self.cols):
-                none_neighbors = []
-                filtered_neighbors = []
+                none_neighbors = [] # Lista de vizinhos None
+                filtered_neighbors = [] # Lista de vizinhos que já têm peça na posição correta
                 piece = self.get_value(r, c)
                 pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
 
@@ -109,7 +113,7 @@ class Board:
                     else:
                         none_neighbors.append((row, i))
 
-
+                # Se a peça atual estiver nas bordas do tabuleiro
                 if len(none_neighbors) != 0:
                     for piece_name in pecas:
                         orientation = pecasT[piece_name]
@@ -124,12 +128,12 @@ class Board:
                                 is_compatible = False
                                 break
                         if is_compatible:
-                            self.possible_pieces[r, c] = self.possible_pieces[r, c] + [piece_name]
+                            self.possible_pieces[r, c].append(piece_name)
 
                     if len(self.possible_pieces[r, c]) > 1:
                         self.incompatible_pieces.insert(0, (r, c))
                     else:
-                        self.matrix[r][c] = self.possible_pieces[r, c][0]
+                        self.matrix[r][c] = self.possible_pieces[r, c][0] # Atualiza a peça na posição (r, c)
 
                 else:
                     for piece_name in pecas:
@@ -146,13 +150,14 @@ class Board:
                                 break
                                 
                         if is_compatible:
-                            self.possible_pieces[r, c] = self.possible_pieces[r, c] + [piece_name]
+                            self.possible_pieces[r, c].append(piece_name)
 
                     if len(self.possible_pieces[r, c]) > 1:
                         self.incompatible_pieces.insert(0, (r, c))
                     else:
-                        self.matrix[r][c] = self.possible_pieces[r, c][0]
+                        self.matrix[r][c] = self.possible_pieces[r, c][0] # Atualiza a peça na posição (r, c)
 
+        # Tentativa de resolver o problema de memória, porque não é necessário guardar as peças possíveis das posições que já têm peça
         for r in range(self.rows):
             for c in range(self.cols):
                 if (r, c) not in self.incompatible_pieces:
@@ -161,8 +166,8 @@ class Board:
         return self
 
     def action_piece(self, row, col):
-        """Determina ações possíveis para a peça na posição (row, col)."""
-        filtered_neighbors = []
+        """Removeas possibilidades de peças para a posição (row, col) que não são compatíveis com os vizinhos."""
+        filtered_neighbors = [] # Lista de vizinhos que já têm peça
 
         for i in range(4):
             r, c = self.determine_neighbor_position(row, col, i)
