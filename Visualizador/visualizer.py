@@ -24,5 +24,5 @@ def visualizer():
                 img = mpimg.imread(img_path) 
                 axs[i, j].imshow(img) 
 
-        plt.show()  
+        plt.savefig('output.png')  
 visualizer()

@@ -100,7 +100,8 @@ class Board:
                 none_neighbors = [] # Lista de vizinhos None
                 filtered_neighbors = [] # Lista de vizinhos que já têm peça na posição correta
                 piece = self.get_value(r, c)
-                pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
+                pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV \
+                    if piece in pecasV else pecasF if piece in pecasF else None
 
                 for i in range(4):
                     row, col = self.determine_neighbor_position(r, c, i)
@@ -146,7 +147,8 @@ class Board:
                     filtered_neighbors.append((self.get_value(r, c), i))
 
         piece = self.get_value(row, col)
-        pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV if piece in pecasV else pecasF if piece in pecasF else None
+        pecas = pecasL if piece in pecasL else pecasB if piece in pecasB else pecasV \
+            if piece in pecasV else pecasF if piece in pecasF else None
 
         for piece_name in pecas:
             orientation = pecasT[piece_name]
@@ -191,9 +193,9 @@ class PipeMania(Problem):
         das presentes na lista obtida pela execução de
         self.actions(state)."""
         (row, col, piece) = action
+
         new_board = Board(np.copy(state.board.matrix))
         new_board.matrix[row][col] = piece
-
         new_board.incompatible_pieces = state.board.incompatible_pieces[1:]
 
         return PipeManiaState(new_board)
